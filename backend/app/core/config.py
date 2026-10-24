@@ -12,6 +12,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "https://thcs-tan-tien.vercel.app",
+        "https://thcs-tay-tien.vercel.app",
         "*"
     ]
 
