@@ -24,6 +24,7 @@ import {
   Check
 } from "lucide-react";
 import MathView from "@/components/MathView";
+import GeoGebraSpreadsheet from "@/components/GeoGebraSpreadsheet";
 
 interface TelemetryPoint {
   time: number;
@@ -816,6 +817,30 @@ export default function VernierIoTPage() {
             </div>
 
           </div>
+        </div>
+
+        {/* ================= GEOGEBRA SPREADSHEET & GRAPH FOR EXPERIMENT ================= */}
+        <div className="flex flex-col gap-3 mt-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px] text-sky-600">calculate</span>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Bảng Số Liệu Spreadsheet &amp; Đồ Thị Tọa Độ Thực Nghiệm (Chuẩn GeoGebra)
+              </h2>
+            </div>
+            <span className="text-xs text-slate-500 font-mono">
+              Hồi quy đường thẳng d = v·t, so sánh lần đo 1 (v₁) và lần đo 2 (v₂)
+            </span>
+          </div>
+          <GeoGebraSpreadsheet
+            experimentTitle={exp.title}
+            labelX="t(s)"
+            labelY={activeExp === "sound" ? "I(dB)" : activeExp === "force" ? "F(N)" : activeExp === "ohm" ? "I(mA)" : "d(m)"}
+            unitX="s"
+            unitY={exp.defaultUnit}
+            curve1Name="v₁"
+            curve2Name="v₂"
+          />
         </div>
       </div>
 

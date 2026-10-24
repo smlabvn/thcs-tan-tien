@@ -27,8 +27,10 @@ import {
   Activity,
   Flame,
   RotateCw,
+  FileSpreadsheet,
 } from "lucide-react";
 import MathView from "@/components/MathView";
+import GeoGebraSpreadsheet from "@/components/GeoGebraSpreadsheet";
 
 export type THCSExperimentType =
   | "spring"
@@ -346,7 +348,7 @@ export default function VirtualLabPage() {
   const [leverArmRight, setLeverArmRight] = useState<number>(2); // vị trí vạch
 
   // Right column tabs
-  const [activeTab, setActiveTab] = useState<"formula" | "drill" | "report">("formula");
+  const [activeTab, setActiveTab] = useState<"formula" | "drill" | "report" | "geogebra">("formula");
   const [drillAnswer, setDrillAnswer] = useState<string | null>(null);
   const [drillChecked, setDrillChecked] = useState<boolean>(false);
 
@@ -1857,6 +1859,17 @@ export default function VirtualLabPage() {
               >
                 <span>Báo Cáo Lab</span>
               </button>
+              <button
+                onClick={() => setActiveTab("geogebra")}
+                className={`px-3 py-2.5 font-bold transition-all border-b-2 flex items-center gap-1.5 ${
+                  activeTab === "geogebra"
+                    ? "text-emerald-600 border-emerald-600 bg-white dark:bg-slate-900 rounded-t-lg"
+                    : "text-slate-600 border-transparent hover:text-slate-900"
+                }`}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-sky-600" />
+                <span>Bảng số liệu (GeoGebra)</span>
+              </button>
             </div>
 
             {/* TAB CONTENT: FORMULA WITH KATEX (ISO 80000 / IUPAP / SI STANDARD) */}
@@ -2596,7 +2609,45 @@ export default function VirtualLabPage() {
                 </button>
               </div>
             )}
+
+            {/* TAB CONTENT: GEOGEBRA SPREADSHEET & GRAPH */}
+            {activeTab === "geogebra" && (
+              <div className="p-4 flex flex-col gap-3">
+                <div className="text-xs text-slate-600 dark:text-slate-400">
+                  Bảng số liệu tính toán và đồ thị tọa độ thực nghiệm GeoGebra (chuẩn CT GDPT 2018):
+                </div>
+                <GeoGebraSpreadsheet
+                  experimentTitle={SIM_DATA[activeExp].title}
+                  labelX="t(s)"
+                  labelY="d(m)"
+                  curve1Name="v₁"
+                  curve2Name="v₂"
+                />
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* ================= FULL-WIDTH GEOGEBRA SPREADSHEET WORKSPACE ================= */}
+        <div className="mt-6 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px] text-sky-600">calculate</span>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Bảng Số Liệu Spreadsheet &amp; Đồ Thị Tọa Độ Thực Nghiệm (Chuẩn GeoGebra)
+              </h2>
+            </div>
+            <span className="text-xs text-slate-500 font-mono">
+              Hỗ trợ phân tích sai số, vẽ điểm (t, d) &amp; hồi quy đường thẳng
+            </span>
+          </div>
+          <GeoGebraSpreadsheet
+            experimentTitle={SIM_DATA[activeExp].title}
+            labelX="t(s)"
+            labelY="d(m)"
+            curve1Name="v₁"
+            curve2Name="v₂"
+          />
         </div>
       </div>
     </div>
