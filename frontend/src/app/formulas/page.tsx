@@ -242,7 +242,7 @@ const DEFAULT_FORMULAS: FormulaItem[] = [
     grade: 8,
     category: "co",
     name: "Quy tắc đòn bẩy & Moment lực",
-    intlMath: "\\sum M = 0 \\iff F_1 \\cdot d_1 = F_2 \\cdot d_2",
+    intlMath: "F_1 \\cdot d_1 = F_2 \\cdot d_2",
     vnMath: "F_1 \\cdot d_1 = F_2 \\cdot d_2",
     intlVariables: [
       { symbol: "M", unit: "N·m", name: "Moment của lực (M = F · d - Vật lí 10)" },
@@ -261,8 +261,8 @@ const DEFAULT_FORMULAS: FormulaItem[] = [
     grade: 8,
     category: "co",
     name: "Cơ năng: Động năng & Thế năng trọng trường",
-    intlMath: "E = E_{\\text{k}} + E_{\\text{p}} = \\frac{1}{2}m v^2 + m g h",
-    vnMath: "W = W_đ + W_t = \\frac{1}{2}m v^2 + 10 m h",
+    intlMath: "\\begin{gathered} E = E_{\\text{k}} + E_{\\text{p}} \\\\[3pt] E = \\frac{1}{2} m v^2 + m g h \\end{gathered}",
+    vnMath: "\\begin{gathered} W = W_{\\text{đ}} + W_{\\text{t}} \\\\[3pt] W = \\frac{1}{2} m v^2 + 10 m h \\end{gathered}",
     intlVariables: [
       { symbol: "E", unit: "J", name: "Cơ năng toàn phần" },
       { symbol: "E_{\\text{k}}", unit: "J", name: "Động năng của vật" },
@@ -273,8 +273,8 @@ const DEFAULT_FORMULAS: FormulaItem[] = [
     ],
     vnVariables: [
       { symbol: "W", unit: "J", name: "Cơ năng toàn phần" },
-      { symbol: "W_đ", unit: "J", name: "Động năng" },
-      { symbol: "W_t", unit: "J", name: "Thế năng" },
+      { symbol: "W_{\\text{đ}}", unit: "J", name: "Động năng" },
+      { symbol: "W_{\\text{t}}", unit: "J", name: "Thế năng" },
     ],
     explanation: "Cơ năng bảo toàn khi bỏ qua ma sát và lực cản: động năng và thế năng có thể chuyển hóa qua lại lẫn nhau.",
     latexCode: "E = \\frac{1}{2}mv^2 + mgh",
@@ -306,8 +306,8 @@ const DEFAULT_FORMULAS: FormulaItem[] = [
     grade: 9,
     category: "dien",
     name: "Điện trở tương đương mạch nối tiếp",
-    intlMath: "R_{\\text{eq}} = R_1 + R_2, \\quad I = I_1 = I_2, \\quad U = U_1 + U_2",
-    vnMath: "R_{tđ} = R_1 + R_2",
+    intlMath: "\\begin{gathered} R_{\\text{eq}} = R_1 + R_2 \\\\[3pt] I = I_1 = I_2, \\quad U = U_1 + U_2 \\end{gathered}",
+    vnMath: "\\begin{gathered} R_{tđ} = R_1 + R_2 \\\\[3pt] I = I_1 = I_2, \\quad U = U_1 + U_2 \\end{gathered}",
     intlVariables: [
       { symbol: "R_{\\text{eq}}", unit: "Ω", name: "Điện trở tương đương (Equivalent Resistance)" },
       { symbol: "R_1, R_2", unit: "Ω", name: "Các điện trở thành phần" },
@@ -324,8 +324,8 @@ const DEFAULT_FORMULAS: FormulaItem[] = [
     grade: 9,
     category: "dien",
     name: "Điện trở tương đương mạch song song",
-    intlMath: "\\frac{1}{R_{\\text{eq}}} = \\frac{1}{R_1} + \\frac{1}{R_2} \\iff R_{\\text{eq}} = \\frac{R_1 \\cdot R_2}{R_1 + R_2}",
-    vnMath: "\\frac{1}{R_{tđ}} = \\frac{1}{R_1} + \\frac{1}{R_2}",
+    intlMath: "\\begin{gathered} \\frac{1}{R_{\\text{eq}}} = \\frac{1}{R_1} + \\frac{1}{R_2} \\\\[4pt] R_{\\text{eq}} = \\frac{R_1 \\cdot R_2}{R_1 + R_2} \\end{gathered}",
+    vnMath: "\\begin{gathered} \\frac{1}{R_{tđ}} = \\frac{1}{R_1} + \\frac{1}{R_2} \\\\[4pt] R_{tđ} = \\frac{R_1 \\cdot R_2}{R_1 + R_2} \\end{gathered}",
     intlVariables: [
       { symbol: "R_{\\text{eq}}", unit: "Ω", name: "Điện trở tương đương" },
       { symbol: "U", unit: "V", name: "Hiệu điện thế mạch: U = U1 = U2" },
@@ -342,8 +342,8 @@ const DEFAULT_FORMULAS: FormulaItem[] = [
     grade: 9,
     category: "dien",
     name: "Công suất điện & Định luật Joule-Lenz",
-    intlMath: "P = U \\cdot I = I^2 \\cdot R = \\frac{U^2}{R}, \\quad Q = I^2 \\cdot R \\cdot t",
-    vnMath: "P = U \\cdot I, \\quad Q = I^2 \\cdot R \\cdot t",
+    intlMath: "\\begin{gathered} P = U \\cdot I = I^2 \\cdot R = \\frac{U^2}{R} \\\\[4pt] Q = I^2 \\cdot R \\cdot t \\end{gathered}",
+    vnMath: "\\begin{gathered} P = U \\cdot I = \\frac{U^2}{R} \\\\[4pt] Q = I^2 \\cdot R \\cdot t \\end{gathered}",
     intlVariables: [
       { symbol: "P", unit: "W", name: "Công suất điện tiêu thụ" },
       { symbol: "Q", unit: "J", name: "Nhiệt lượng tỏa ra (Joule's heat)" },
@@ -384,8 +384,8 @@ const DEFAULT_FORMULAS: FormulaItem[] = [
     grade: 9,
     category: "quang",
     name: "Phương trình thấu kính mỏng (Thin Lens Equation)",
-    intlMath: "\\frac{1}{f} = \\frac{1}{d_{\\text{o}}} + \\frac{1}{d_{\\text{i}}} \\iff d_{\\text{i}} = \\frac{d_{\\text{o}} \\cdot f}{d_{\\text{o}} - f}",
-    vnMath: "\\frac{1}{f} = \\frac{1}{d} + \\frac{1}{d'}",
+    intlMath: "\\begin{gathered} \\frac{1}{f} = \\frac{1}{d_{\\text{o}}} + \\frac{1}{d_{\\text{i}}} \\\\[4pt] d_{\\text{i}} = \\frac{d_{\\text{o}} \\cdot f}{d_{\\text{o}} - f} \\end{gathered}",
+    vnMath: "\\begin{gathered} \\frac{1}{f} = \\frac{1}{d} + \\frac{1}{d'} \\\\[4pt] d' = \\frac{d \\cdot f}{d - f} \\end{gathered}",
     intlVariables: [
       { symbol: "f", unit: "cm hoặc m", name: "Tiêu cự thấu kính (hội tụ: f > 0)" },
       { symbol: "d_{\\text{o}}", unit: "cm hoặc m", name: "Khoảng cách từ vật đến quang tâm O" },
@@ -404,8 +404,8 @@ const DEFAULT_FORMULAS: FormulaItem[] = [
     grade: 9,
     category: "quang",
     name: "Độ phóng đại tuyến tính & Độ tụ",
-    intlMath: "m = -\\frac{d_{\\text{i}}}{d_{\\text{o}}} = \\frac{h_{\\text{i}}}{h_{\\text{o}}}, \\quad D = \\frac{1}{f}",
-    vnMath: "k = -\\frac{d'}{d}, \\quad D = \\frac{1}{f}",
+    intlMath: "\\begin{gathered} m = -\\frac{d_{\\text{i}}}{d_{\\text{o}}} = \\frac{h_{\\text{i}}}{h_{\\text{o}}} \\\\[4pt] D = \\frac{1}{f} \\text{ (dp)} \\end{gathered}",
+    vnMath: "\\begin{gathered} k = -\\frac{d'}{d} = \\frac{h'}{h} \\\\[4pt] D = \\frac{1}{f} \\text{ (dp)} \\end{gathered}",
     intlVariables: [
       { symbol: "m", unit: "không thứ nguyên", name: "Độ phóng đại tuyến tính" },
       { symbol: "h_{\\text{i}}, h_{\\text{o}}", unit: "cm", name: "Chiều cao của ảnh và của vật" },
@@ -1888,7 +1888,7 @@ export default function FormulasPage() {
             return (
               <div
                 key={item.id}
-                className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all flex flex-col justify-between gap-4 group relative"
+                className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all flex flex-col justify-between gap-4 group relative overflow-hidden"
               >
                 <div className="flex flex-col gap-2.5">
                   <div className="flex items-center justify-between">
@@ -1955,7 +1955,7 @@ export default function FormulasPage() {
                   </h3>
 
                   {/* KaTeX Formula Box */}
-                  <div className="p-3 rounded-xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 text-center shadow-2xs">
+                  <div className="py-3 px-2 rounded-xl bg-slate-50/70 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 text-center shadow-2xs overflow-x-auto max-w-full">
                     <MathView math={standardMode === "intl" ? item.intlMath : item.vnMath} block />
                   </div>
 

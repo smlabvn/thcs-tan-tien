@@ -226,7 +226,7 @@ DEFAULT_FORMULAS: List[dict] = [
         "grade": 8,
         "category": "co",
         "name": "Quy tắc đòn bẩy & Moment lực",
-        "intlMath": r"\sum M = 0 \iff F_1 \cdot d_1 = F_2 \cdot d_2",
+        "intlMath": r"F_1 \cdot d_1 = F_2 \cdot d_2",
         "vnMath": r"F_1 \cdot d_1 = F_2 \cdot d_2",
         "intlVariables": [
             {"symbol": "M", "unit": "N·m", "name": "Moment của lực (M = F · d - Vật lí 10)"},
@@ -246,8 +246,8 @@ DEFAULT_FORMULAS: List[dict] = [
         "grade": 8,
         "category": "co",
         "name": "Cơ năng: Động năng & Thế năng trọng trường",
-        "intlMath": r"E = E_{\text{k}} + E_{\text{p}} = \frac{1}{2}m v^2 + m g h",
-        "vnMath": r"W = W_đ + W_t = \frac{1}{2}m v^2 + 10 m h",
+        "intlMath": r"\begin{gathered} E = E_{\text{k}} + E_{\text{p}} \\[3pt] E = \frac{1}{2} m v^2 + m g h \end{gathered}",
+        "vnMath": r"\begin{gathered} W = W_{\text{đ}} + W_{\text{t}} \\[3pt] W = \frac{1}{2} m v^2 + 10 m h \end{gathered}",
         "intlVariables": [
             {"symbol": "E", "unit": "J", "name": "Cơ năng toàn phần"},
             {"symbol": r"E_{\text{k}}", "unit": "J", "name": "Động năng của vật"},
@@ -291,8 +291,8 @@ DEFAULT_FORMULAS: List[dict] = [
         "grade": 9,
         "category": "dien",
         "name": "Điện trở tương đương mạch nối tiếp",
-        "intlMath": r"R_{\text{eq}} = R_1 + R_2, \quad I = I_1 = I_2, \quad U = U_1 + U_2",
-        "vnMath": r"R_{tđ} = R_1 + R_2",
+        "intlMath": r"\begin{gathered} R_{\text{eq}} = R_1 + R_2 \\[3pt] I = I_1 = I_2, \quad U = U_1 + U_2 \end{gathered}",
+        "vnMath": r"\begin{gathered} R_{\text{tđ}} = R_1 + R_2 \\[3pt] I = I_1 = I_2, \quad U = U_1 + U_2 \end{gathered}",
         "intlVariables": [
             {"symbol": r"R_{\text{eq}}", "unit": "Ω", "name": "Điện trở tương đương (Equivalent Resistance)"},
             {"symbol": "R_1, R_2", "unit": "Ω", "name": "Các điện trở thành phần"}
@@ -310,8 +310,8 @@ DEFAULT_FORMULAS: List[dict] = [
         "grade": 9,
         "category": "dien",
         "name": "Điện trở tương đương mạch song song",
-        "intlMath": r"\frac{1}{R_{\text{eq}}} = \frac{1}{R_1} + \frac{1}{R_2} \iff R_{\text{eq}} = \frac{R_1 \cdot R_2}{R_1 + R_2}",
-        "vnMath": r"\frac{1}{R_{tđ}} = \frac{1}{R_1} + \frac{1}{R_2}",
+        "intlMath": r"\begin{gathered} \frac{1}{R_{\text{eq}}} = \frac{1}{R_1} + \frac{1}{R_2} \\[4pt] R_{\text{eq}} = \frac{R_1 \cdot R_2}{R_1 + R_2} \end{gathered}",
+        "vnMath": r"\begin{gathered} \frac{1}{R_{\text{tđ}}} = \frac{1}{R_1} + \frac{1}{R_2} \\[4pt] R_{\text{tđ}} = \frac{R_1 \cdot R_2}{R_1 + R_2} \end{gathered}",
         "intlVariables": [
             {"symbol": r"R_{\text{eq}}", "unit": "Ω", "name": "Điện trở tương đương"},
             {"symbol": "U", "unit": "V", "name": "Hiệu điện thế mạch: U = U1 = U2"},
@@ -329,8 +329,8 @@ DEFAULT_FORMULAS: List[dict] = [
         "grade": 9,
         "category": "dien",
         "name": "Công suất điện & Định luật Joule-Lenz",
-        "intlMath": r"P = U \cdot I = I^2 \cdot R = \frac{U^2}{R}, \quad Q = I^2 \cdot R \cdot t",
-        "vnMath": r"P = U \cdot I, \quad Q = I^2 \cdot R \cdot t",
+        "intlMath": r"\begin{gathered} P = U \cdot I = I^2 \cdot R = \frac{U^2}{R} \\[4pt] Q = I^2 \cdot R \cdot t \end{gathered}",
+        "vnMath": r"\begin{gathered} P = U \cdot I = \frac{U^2}{R} \\[4pt] Q = I^2 \cdot R \cdot t \end{gathered}",
         "intlVariables": [
             {"symbol": "P", "unit": "W", "name": "Công suất điện tiêu thụ"},
             {"symbol": "Q", "unit": "J", "name": "Nhiệt lượng tỏa ra (Joule's heat)"},
@@ -373,8 +373,8 @@ DEFAULT_FORMULAS: List[dict] = [
         "grade": 9,
         "category": "quang",
         "name": "Phương trình thấu kính mỏng (Thin Lens Equation)",
-        "intlMath": r"\frac{1}{f} = \frac{1}{d_{\text{o}}} + \frac{1}{d_{\text{i}}} \iff d_{\text{i}} = \frac{d_{\text{o}} \cdot f}{d_{\text{o}} - f}",
-        "vnMath": r"\frac{1}{f} = \frac{1}{d} + \frac{1}{d'}",
+        "intlMath": r"\begin{gathered} \frac{1}{f} = \frac{1}{d_{\text{o}}} + \frac{1}{d_{\text{i}}} \\[4pt] d_{\text{i}} = \frac{d_{\text{o}} \cdot f}{d_{\text{o}} - f} \end{gathered}",
+        "vnMath": r"\begin{gathered} \frac{1}{f} = \frac{1}{d} + \frac{1}{d'} \\[4pt] d' = \frac{d \cdot f}{d - f} \end{gathered}",
         "intlVariables": [
             {"symbol": "f", "unit": "cm hoặc m", "name": "Tiêu cự thấu kính (hội tụ: f > 0)"},
             {"symbol": r"d_{\text{o}}", "unit": "cm hoặc m", "name": "Khoảng cách từ vật đến quang tâm O"},
@@ -394,8 +394,8 @@ DEFAULT_FORMULAS: List[dict] = [
         "grade": 9,
         "category": "quang",
         "name": "Độ phóng đại tuyến tính & Độ tụ",
-        "intlMath": r"m = -\frac{d_{\text{i}}}{d_{\text{o}}} = \frac{h_{\text{i}}}{h_{\text{o}}}, \quad D = \frac{1}{f}",
-        "vnMath": r"k = -\frac{d'}{d}, \quad D = \frac{1}{f}",
+        "intlMath": r"\begin{gathered} m = -\frac{d_{\text{i}}}{d_{\text{o}}} = \frac{h_{\text{i}}}{h_{\text{o}}} \\[4pt] D = \frac{1}{f} \text{ (dp)} \end{gathered}",
+        "vnMath": r"\begin{gathered} k = -\frac{d'}{d} = \frac{h'}{h} \\[4pt] D = \frac{1}{f} \text{ (dp)} \end{gathered}",
         "intlVariables": [
             {"symbol": "m", "unit": "không thứ nguyên", "name": "Độ phóng đại tuyến tính"},
             {"symbol": r"h_{\text{i}}, h_{\text{o}}", "unit": "cm", "name": "Chiều cao của ảnh và của vật"},

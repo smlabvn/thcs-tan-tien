@@ -414,7 +414,7 @@
     "grade": 8,
     "category": "co",
     "name": "Quy tắc đòn bẩy & Moment lực",
-    "intlMath": "\\sum M = 0 \\iff F_1 \\cdot d_1 = F_2 \\cdot d_2",
+    "intlMath": "F_1 \\cdot d_1 = F_2 \\cdot d_2",
     "vnMath": "F_1 \\cdot d_1 = F_2 \\cdot d_2",
     "intlVariables": [
       {
@@ -454,8 +454,8 @@
     "grade": 8,
     "category": "co",
     "name": "Cơ năng: Động năng & Thế năng trọng trường",
-    "intlMath": "E = E_{\\text{k}} + E_{\\text{p}} = \\frac{1}{2}m v^2 + m g h",
-    "vnMath": "W = W_đ + W_t = \\frac{1}{2}m v^2 + 10 m h",
+    "intlMath": "\\begin{gathered} E = E_{\\text{k}} + E_{\\text{p}} \\\\[3pt] E = \\frac{1}{2} m v^2 + m g h \\end{gathered}",
+    "vnMath": "\\begin{gathered} W = W_{\\text{đ}} + W_{\\text{t}} \\\\[3pt] W = \\frac{1}{2} m v^2 + 10 m h \\end{gathered}",
     "intlVariables": [
       {
         "symbol": "E",
@@ -559,8 +559,8 @@
     "grade": 9,
     "category": "dien",
     "name": "Điện trở tương đương mạch nối tiếp",
-    "intlMath": "R_{\\text{eq}} = R_1 + R_2, \\quad I = I_1 = I_2, \\quad U = U_1 + U_2",
-    "vnMath": "R_{tđ} = R_1 + R_2",
+    "intlMath": "\\begin{gathered} R_{\\text{eq}} = R_1 + R_2 \\\\[3pt] I = I_1 = I_2, \\quad U = U_1 + U_2 \\end{gathered}",
+    "vnMath": "\\begin{gathered} R_{tđ} = R_1 + R_2 \\\\[3pt] I = I_1 = I_2, \\quad U = U_1 + U_2 \\end{gathered}",
     "intlVariables": [
       {
         "symbol": "R_{\\text{eq}}",
@@ -594,8 +594,8 @@
     "grade": 9,
     "category": "dien",
     "name": "Điện trở tương đương mạch song song",
-    "intlMath": "\\frac{1}{R_{\\text{eq}}} = \\frac{1}{R_1} + \\frac{1}{R_2} \\iff R_{\\text{eq}} = \\frac{R_1 \\cdot R_2}{R_1 + R_2}",
-    "vnMath": "\\frac{1}{R_{tđ}} = \\frac{1}{R_1} + \\frac{1}{R_2}",
+    "intlMath": "\\begin{gathered} \\frac{1}{R_{\\text{eq}}} = \\frac{1}{R_1} + \\frac{1}{R_2} \\\\[4pt] R_{\\text{eq}} = \\frac{R_1 \\cdot R_2}{R_1 + R_2} \\end{gathered}",
+    "vnMath": "\\begin{gathered} \\frac{1}{R_{tđ}} = \\frac{1}{R_1} + \\frac{1}{R_2} \\\\[4pt] R_{tđ} = \\frac{R_1 \\cdot R_2}{R_1 + R_2} \\end{gathered}",
     "intlVariables": [
       {
         "symbol": "R_{\\text{eq}}",
@@ -629,8 +629,8 @@
     "grade": 9,
     "category": "dien",
     "name": "Công suất điện & Định luật Joule-Lenz",
-    "intlMath": "P = U \\cdot I = I^2 \\cdot R = \\frac{U^2}{R}, \\quad Q = I^2 \\cdot R \\cdot t",
-    "vnMath": "P = U \\cdot I, \\quad Q = I^2 \\cdot R \\cdot t",
+    "intlMath": "\\begin{gathered} P = U \\cdot I = I^2 \\cdot R = \\frac{U^2}{R} \\\\[4pt] Q = I^2 \\cdot R \\cdot t \\end{gathered}",
+    "vnMath": "\\begin{gathered} P = U \\cdot I = \\frac{U^2}{R} \\\\[4pt] Q = I^2 \\cdot R \\cdot t \\end{gathered}",
     "intlVariables": [
       {
         "symbol": "P",
@@ -729,8 +729,8 @@
     "grade": 9,
     "category": "quang",
     "name": "Phương trình thấu kính mỏng (Thin Lens Equation)",
-    "intlMath": "\\frac{1}{f} = \\frac{1}{d_{\\text{o}}} + \\frac{1}{d_{\\text{i}}} \\iff d_{\\text{i}} = \\frac{d_{\\text{o}} \\cdot f}{d_{\\text{o}} - f}",
-    "vnMath": "\\frac{1}{f} = \\frac{1}{d} + \\frac{1}{d'}",
+    "intlMath": "\\begin{gathered} \\frac{1}{f} = \\frac{1}{d_{\\text{o}}} + \\frac{1}{d_{\\text{i}}} \\\\[4pt] d_{\\text{i}} = \\frac{d_{\\text{o}} \\cdot f}{d_{\\text{o}} - f} \\end{gathered}",
+    "vnMath": "\\begin{gathered} \\frac{1}{f} = \\frac{1}{d} + \\frac{1}{d'} \\\\[4pt] d' = \\frac{d \\cdot f}{d - f} \\end{gathered}",
     "intlVariables": [
       {
         "symbol": "f",
@@ -774,8 +774,8 @@
     "grade": 9,
     "category": "quang",
     "name": "Độ phóng đại tuyến tính & Độ tụ",
-    "intlMath": "m = -\\frac{d_{\\text{i}}}{d_{\\text{o}}} = \\frac{h_{\\text{i}}}{h_{\\text{o}}}, \\quad D = \\frac{1}{f}",
-    "vnMath": "k = -\\frac{d'}{d}, \\quad D = \\frac{1}{f}",
+    "intlMath": "\\begin{gathered} m = -\\frac{d_{\\text{i}}}{d_{\\text{o}}} = \\frac{h_{\\text{i}}}{h_{\\text{o}}} \\\\[4pt] D = \\frac{1}{f} \\text{ (dp)} \\end{gathered}",
+    "vnMath": "\\begin{gathered} k = -\\frac{d'}{d} = \\frac{h'}{h} \\\\[4pt] D = \\frac{1}{f} \\text{ (dp)} \\end{gathered}",
     "intlVariables": [
       {
         "symbol": "m",

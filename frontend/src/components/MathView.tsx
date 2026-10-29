@@ -22,6 +22,15 @@ export default function MathView({ math, block = false, className = "" }: MathVi
     }
   }, [math, block]);
 
+  if (block) {
+    return (
+      <div
+        className={`w-full max-w-full overflow-x-auto text-center font-mono py-1 ${className}`}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  }
+
   return (
     <span
       className={`inline-block font-mono whitespace-nowrap ${className}`}
