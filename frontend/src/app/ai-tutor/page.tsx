@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Sparkles, Send, BookOpen, Bot, User, Lightbulb } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Sparkles, Send, BookOpen, Bot, User, Lightbulb, Key, X, ExternalLink, Check } from "lucide-react";
 
 interface Message {
   sender: "user" | "ai";
@@ -25,12 +25,39 @@ export default function AITutorPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       sender: "ai",
-      text: "Xin chào bạn! Mình là Gia Sư Trí Tuệ Nhân Tạo PhysiX THCS. Mình luôn sẵn sàng giải đáp mọi thắc mắc về phân môn Vật Lý trong môn Khoa Học Tự Nhiên THCS (Lớp 6, 7, 8, 9 GDPT 2018), giải thích hiện tượng thí nghiệm ảo và ôn luyện khảo sát vào lớp 10. Bạn đang muốn tìm hiểu chủ đề nào hôm nay?",
-      provider: "PhysiX RAG Engine",
+      text: "Xin chào bạn! Mình là Gia Sư Trí Tuệ Nhân Tạo PhysiX THCS (THCS Tây Tiến). Mình sử dụng mô hình Google Gemini kết hợp hệ thống RAG bám sát SGK Khoa Học Tự Nhiên Lớp 6, 7, 8, 9 GDPT 2018 và chuẩn quốc tế ISO 80000 / SI. Bạn đang cần giải đáp câu hỏi hay bài tập nào hôm nay?",
+      provider: "Google Gemini + PhysiX RAG Engine",
     },
   ]);
   const [input, setInput] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
+  const [apiKey, setApiKey] = useState<string>("");
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState<boolean>(false);
+  const [tempKeyInput, setTempKeyInput] = useState<string>("");
+  const [keySavedToast, setKeySavedToast] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("physix_gemini_api_key") || "";
+      setApiKey(saved);
+      setTempKeyInput(saved);
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const handleSaveApiKey = () => {
+    const k = tempKeyInput.trim();
+    setApiKey(k);
+    try {
+      localStorage.setItem("physix_gemini_api_key", k);
+    } catch {}
+    setKeySavedToast(true);
+    setTimeout(() => {
+      setKeySavedToast(false);
+      setIsKeyModalOpen(false);
+    }, 1200);
+  };
 
   const handleSend = async (queryText?: string) => {
     const q = (queryText || input).trim();
@@ -42,22 +69,22 @@ export default function AITutorPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/rag/query", {
+      const res = await fetch("/api/tutor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, grade: 9 }),
+        body: JSON.stringify({ query: q, grade: 9, userApiKey: apiKey }),
       });
       const data = await res.json();
       setMessages([
         ...newMessages,
         {
           sender: "ai",
-          text: data.answer,
+          text: data.answer || "Không nhận được phản hồi từ mô hình AI.",
           sources: data.sources,
-          provider: data.provider,
+          provider: data.provider || "Google Gemini + PhysiX RAG",
         },
       ]);
-    } catch (e) {
+    } catch (e: any) {
       setMessages([
         ...newMessages,
         {
@@ -82,23 +109,38 @@ export default function AITutorPage() {
     <div className="w-full bg-white text-slate-900">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col h-[calc(100vh-8rem)]">
         {/* Header */}
-        <div className="pb-4 border-b border-slate-200 flex items-center justify-between">
+        <div className="pb-4 border-b border-slate-200 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-xs">
               <Sparkles className="w-5 h-5 text-amber-300" />
             </div>
             <div>
               <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-                <span>Gia Sư Trí Tuệ Nhân Tạo PhysiX THCS</span>
+                <span>Gia Sư AI THCS Tây Tiến</span>
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                  RAG + Gemini (KHTN 6-9)
+                  Google Gemini API + RAG
                 </span>
               </h1>
               <p className="text-xs text-slate-500 font-medium">
-                Truy vấn ngữ nghĩa kho tài liệu SGK Khoa Học Tự Nhiên (Vật Lý Lớp 6 - 9) GDPT 2018
+                Tra cứu và giải đáp bài tập Vật Lý THCS (KHTN Lớp 6 - 9) theo SGK GDPT 2018
               </p>
             </div>
           </div>
+
+          {/* Gemini API Key Setting Button */}
+          <button
+            type="button"
+            onClick={() => setIsKeyModalOpen(true)}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow-2xs ${
+              apiKey
+                ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                : "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100"
+            }`}
+            title="Cài đặt khóa API Google Gemini"
+          >
+            <Key className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{apiKey ? "Gemini API: Đã kết nối" : "Cài đặt Gemini API Key"}</span>
+          </button>
         </div>
 
         {/* Message Stream */}
@@ -133,7 +175,7 @@ export default function AITutorPage() {
                 {msg.sources && msg.sources.length > 0 && (
                   <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500 flex flex-col gap-1.5 font-mono">
                     <span className="font-bold text-emerald-700 flex items-center gap-1">
-                      <BookOpen className="w-3.5 h-3.5" /> Nguồn SGK KHTN THCS trích dẫn:
+                      <BookOpen className="w-3.5 h-3.5" /> Nguồn tài liệu SGK KHTN THCS tham chiếu:
                     </span>
                     <ul className="list-disc list-inside space-y-0.5">
                       {msg.sources.map((s, sIdx) => (
@@ -147,7 +189,7 @@ export default function AITutorPage() {
 
                 {msg.provider && (
                   <div className="mt-2 text-[10px] text-slate-400 font-mono text-right">
-                    Phản hồi từ: {msg.provider}
+                    Mô hình: {msg.provider}
                   </div>
                 )}
               </div>
@@ -161,7 +203,7 @@ export default function AITutorPage() {
               </div>
               <div className="p-4 rounded-2xl bg-white border border-slate-200 text-xs text-slate-500 flex items-center gap-2 shadow-xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
-                <span>Gia sư AI đang tra cứu SGK KHTN 6-9 và lập luận chi tiết...</span>
+                <span>Google Gemini AI đang suy luận câu trả lời theo SGK KHTN 6-9...</span>
               </div>
             </div>
           )}
@@ -207,6 +249,80 @@ export default function AITutorPage() {
           </div>
         </div>
       </div>
+
+      {/* GEMINI API KEY MODAL */}
+      {isKeyModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 flex flex-col gap-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Key className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-slate-900 text-base">Cấu hình Google Gemini API</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsKeyModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Nhập mã <strong>Google Gemini API Key</strong> để Gia sư AI gọi trực tiếp mô hình AI Gemini (gemini-2.5-flash) và giải đáp mọi bài tập phân môn Vật Lý THCS không giới hạn.
+            </p>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-700">Gemini API Key:</label>
+              <input
+                type="password"
+                placeholder="AIzaSy..."
+                value={tempKeyInput}
+                onChange={(e) => setTempKeyInput(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-xs focus:outline-none focus:border-emerald-600"
+              />
+              <span className="text-[11px] text-slate-500">
+                Khóa được lưu bảo mật trong trình duyệt của bạn (LocalStorage) và không bị chia sẻ.
+              </span>
+            </div>
+
+            <a
+              href="https://aistudio.google.com/app/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-emerald-700 hover:underline font-bold"
+            >
+              <span>Lấy khóa Gemini API miễn phí tại Google AI Studio</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setTempKeyInput("");
+                  setApiKey("");
+                  try {
+                    localStorage.removeItem("physix_gemini_api_key");
+                  } catch {}
+                  setIsKeyModalOpen(false);
+                }}
+                className="px-3 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50"
+              >
+                Xóa khóa
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveApiKey}
+                className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 flex items-center gap-1.5 shadow-xs"
+              >
+                {keySavedToast ? <Check className="w-3.5 h-3.5" /> : null}
+                <span>{keySavedToast ? "Đã lưu thành công!" : "Lưu khóa API"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

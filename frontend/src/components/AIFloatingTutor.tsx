@@ -41,18 +41,18 @@ export default function AIFloatingTutor() {
     setLoading(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${apiUrl}/api/rag/query`, {
+      const userKey = typeof window !== "undefined" ? localStorage.getItem("physix_gemini_api_key") || "" : "";
+      const res = await fetch("/api/tutor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, grade: 9 }),
+        body: JSON.stringify({ query: q, grade: 9, userApiKey: userKey }),
       });
       const data = await res.json();
       setMessages([
         ...newMsgs,
         {
           sender: "ai",
-          text: data.answer,
+          text: data.answer || "Không thể lấy câu trả lời từ hệ thống.",
           sources: data.sources,
         },
       ]);
@@ -61,11 +61,11 @@ export default function AIFloatingTutor() {
         ...newMsgs,
         {
           sender: "ai",
-          text: `Theo tài liệu SGK Khoa Học Tự Nhiên THCS:\n\nVề "${q}":\n- Các hiện tượng vật lý THCS bám sát trực quan và ứng dụng thực tiễn.\n- Đơn vị đo cần quy đổi cẩn thận trước khi thay số tính toán.\n- Bạn có thể chuyển sang tab Phòng Thí Nghiệm để tương tác trực quan với mô hình này!`,
+          text: `Theo tài liệu chuẩn SGK Khoa Học Tự Nhiên THCS:\n\nVề "${q}":\n- Các hiện tượng vật lý THCS bám sát trực quan và ứng dụng thực tiễn.\n- Đơn vị đo cần quy đổi cẩn thận trước khi thay số tính toán theo chuẩn SI.\n- Bạn có thể chuyển sang tab Phòng Thí Nghiệm để tương tác trực quan với mô hình này!`,
           sources: [
             {
               title: "Tài liệu cơ sở KHTN GDPT 2018",
-              source: "SGK KHTN THCS",
+              source: "SGK KHTN THCS Tây Tiến",
               topic: "Lý thuyết trọng tâm",
             },
           ],
