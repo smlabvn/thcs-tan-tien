@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Sparkles, Send, BookOpen, Bot, User, Lightbulb, Key, X, ExternalLink, Check } from "lucide-react";
+import MarkdownMathView from "@/components/MarkdownMathView";
 
 interface Message {
   sender: "user" | "ai";
@@ -188,7 +189,11 @@ export default function AITutorPage() {
                     : "bg-white border border-slate-200 text-slate-800 shadow-xs rounded-tl-none"
                 }`}
               >
-                <div className="whitespace-pre-wrap">{msg.text}</div>
+                {msg.sender === "user" ? (
+                  <div className="whitespace-pre-wrap">{msg.text}</div>
+                ) : (
+                  <MarkdownMathView content={msg.text} />
+                )}
 
                 {/* Inline Action if fallback message */}
                 {msg.text.includes("Cài đặt Gemini API Key") && (

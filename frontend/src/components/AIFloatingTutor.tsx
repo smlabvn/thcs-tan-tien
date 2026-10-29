@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sparkles, X, Send, Bot, User, BookOpen } from "lucide-react";
+import MarkdownMathView from "./MarkdownMathView";
 
 interface Message {
   sender: "user" | "ai";
@@ -177,10 +178,14 @@ export default function AIFloatingTutor() {
                   className={`max-w-[85%] p-3 rounded-2xl ${
                     m.sender === "user"
                       ? "bg-emerald-600 text-white font-medium rounded-tr-none shadow-xs"
-                      : "bg-white text-slate-800 border border-slate-200 shadow-xs rounded-tl-none whitespace-pre-wrap"
+                      : "bg-white text-slate-800 border border-slate-200 shadow-xs rounded-tl-none"
                   }`}
                 >
-                  {m.text}
+                  {m.sender === "user" ? (
+                    <div className="whitespace-pre-wrap">{m.text}</div>
+                  ) : (
+                    <MarkdownMathView content={m.text} />
+                  )}
                   {m.sources && m.sources.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-500 font-mono">
                       📚 Nguồn: {m.sources[0].title} ({m.sources[0].source})
