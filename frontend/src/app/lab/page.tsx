@@ -33,8 +33,6 @@ import MathView from "@/components/MathView";
 import GeoGebraSpreadsheet from "@/components/GeoGebraSpreadsheet";
 
 export type THCSExperimentType =
-  | "spring"
-  | "forces_motion"
   | "sound_light"
   | "bending_light"
   | "magnet"
@@ -54,8 +52,7 @@ const LEVER_TICK_M = 0.05;
 
 /** Danh mục các khối lớp THCS theo chuẩn CT GDPT 2018 */
 const GRADE_NAV_TABS = [
-  { id: "all", label: "Tất cả các lớp THCS (13 bài thí nghiệm)" },
-  { id: "6", label: "Lớp 6 — Lực, lò xo và năng lượng" },
+  { id: "all", label: "Tất cả các lớp (11 bài thí nghiệm Lớp 7 - 9)" },
   { id: "7", label: "Lớp 7 — Âm thanh và ánh sáng" },
   { id: "8", label: "Lớp 8 — Khối lượng riêng, áp suất, lực đẩy, điện và nhiệt" },
   { id: "9", label: "Lớp 9 — Cơ năng, quang học và điện" },
@@ -65,7 +62,7 @@ const GRADE_NAV_TABS = [
 const SIM_DATA: Record<
   THCSExperimentType,
   {
-    grade: 6 | 7 | 8 | 9;
+    grade: 7 | 8 | 9;
     url: string;
     title: string;
     subtitle: string;
@@ -73,26 +70,6 @@ const SIM_DATA: Record<
     gradeBadge: string;
   }
 > = {
-  // LỚP 6
-  spring: {
-    grade: 6,
-    url: "/sims/masses-and-springs-basics.html?locale=vi",
-    title: "Thí Nghiệm Biến Dạng Lò Xo, Lực Đàn Hồi & Năng Lượng (Lớp 6)",
-    subtitle:
-      "Treo quả cân 50g, 100g, 250g lên lò xo, đo độ dãn Δl, kiểm chứng định luật đàn hồi Hooke và thế năng đàn hồi",
-    categoryBadge: "Lực & Lò Xo",
-    gradeBadge: "Lớp 6 — Lực, lò xo và năng lượng",
-  },
-  forces_motion: {
-    grade: 6,
-    url: "/sims/forces-and-motion-basics.html?locale=vi",
-    title: "Thí Nghiệm Lực, Lực Ma Sát & Hợp Lực Chuyển Động (Lớp 6)",
-    subtitle:
-      "Tác dụng lực kéo, điều chỉnh lực cản ma sát mặt sàn, kiểm tra hợp lực kéo vật chuyển động và gia tốc",
-    categoryBadge: "Lực & Ma Sát",
-    gradeBadge: "Lớp 6 — Lực, lò xo và năng lượng",
-  },
-
   // LỚP 7
   sound_light: {
     grade: 7,
@@ -200,93 +177,80 @@ const SIM_DATA: Record<
 };
 
 const EXPERIMENTS_CONFIG = [
-  // LỚP 6
-  {
-    id: "spring" as THCSExperimentType,
-    grade: "6" as const,
-    name: "1. Lò xo & Lực đàn hồi (Lớp 6)",
-    icon: Scale,
-  },
-  {
-    id: "forces_motion" as THCSExperimentType,
-    grade: "6" as const,
-    name: "2. Lực, Ma sát & Chuyển động (Lớp 6)",
-    icon: Activity,
-  },
   // LỚP 7
   {
     id: "sound_light" as THCSExperimentType,
     grade: "7" as const,
-    name: "3. Sóng âm & Tần số âm thanh (Lớp 7)",
+    name: "1. Sóng âm & Tần số âm thanh (Lớp 7)",
     icon: Waves,
   },
   {
     id: "bending_light" as THCSExperimentType,
     grade: "7" as const,
-    name: "4. Khúc xạ & Phản xạ Ánh sáng (Lớp 7)",
+    name: "2. Khúc xạ & Phản xạ Ánh sáng (Lớp 7)",
     icon: Sun,
   },
   {
     id: "magnet" as THCSExperimentType,
     grade: "7" as const,
-    name: "5. Từ trường & Kim la bàn (Lớp 7)",
+    name: "3. Từ trường & Kim la bàn (Lớp 7)",
     icon: Compass,
   },
   // LỚP 8
   {
     id: "archimedes" as THCSExperimentType,
     grade: "8" as const,
-    name: "6. Lực đẩy Ác-si-mét & KLR (Lớp 8)",
+    name: "4. Lực đẩy Ác-si-mét & KLR (Lớp 8)",
     icon: Droplets,
   },
   {
     id: "pressure" as THCSExperimentType,
     grade: "8" as const,
-    name: "7. Áp suất chất lỏng & Khí quyển (Lớp 8)",
+    name: "5. Áp suất chất lỏng & Khí quyển (Lớp 8)",
     icon: Gauge,
   },
   {
     id: "lever" as THCSExperimentType,
     grade: "8" as const,
-    name: "8. Quy tắc đòn bẩy & Mômen (Lớp 8)",
+    name: "6. Quy tắc đòn bẩy & Mômen (Lớp 8)",
     icon: Scale,
   },
   {
     id: "electrostatics" as THCSExperimentType,
     grade: "8" as const,
-    name: "9. Hiện tượng nhiễm điện (Lớp 8)",
+    name: "7. Hiện tượng nhiễm điện (Lớp 8)",
     icon: Zap,
   },
   // LỚP 9
   {
     id: "lens" as THCSExperimentType,
     grade: "9" as const,
-    name: "10. Thấu kính hội tụ & Phân kì (Lớp 9)",
+    name: "8. Thấu kính hội tụ & Phân kì (Lớp 9)",
     icon: Search,
   },
   {
     id: "ohm" as THCSExperimentType,
     grade: "9" as const,
-    name: "11. Định luật Ôm & Mạch DC (Lớp 9)",
+    name: "9. Định luật Ôm & Mạch DC (Lớp 9)",
     icon: Lightbulb,
   },
   {
     id: "energy_skate" as THCSExperimentType,
     grade: "9" as const,
-    name: "12. Động năng & Bảo toàn Cơ năng (Lớp 9)",
+    name: "10. Động năng & Bảo toàn Cơ năng (Lớp 9)",
     icon: Flame,
   },
   {
     id: "faraday" as THCSExperimentType,
     grade: "9" as const,
-    name: "13. Cảm ứng điện từ Faraday (Lớp 9)",
+    name: "11. Cảm ứng điện từ Faraday (Lớp 9)",
     icon: RotateCw,
   },
 ];
 
 export default function VirtualLabPage() {
-  const [gradeFilter, setGradeFilter] = useState<"all" | "6" | "7" | "8" | "9">("all");
-  const [activeExp, setActiveExp] = useState<THCSExperimentType>("spring");
+  const [gradeFilter, setGradeFilter] = useState<"all" | "7" | "8" | "9">("all");
+  const [activeExp, setActiveExp] = useState<THCSExperimentType>("sound_light");
   const [archimedesMode, setArchimedesMode] = useState<"buoyancy" | "density">("buoyancy");
   const [simLoading, setSimLoading] = useState<boolean>(false);
 
@@ -311,13 +275,6 @@ export default function VirtualLabPage() {
   const [showVirtualImage, setShowVirtualImage] = useState<boolean>(true);
   const [showLabels, setShowLabels] = useState<boolean>(true);
   const [lensDiameter, setLensDiameter] = useState<number>(100); // 60 - 120 cm
-
-  // ================= EXP 0 (KHTN 6): LỰC, LÒ XO & NĂNG LƯỢNG =================
-  const [springMassG, setSpringMassG] = useState<number>(100); // g
-  const [springK, setSpringK] = useState<number>(25); // N/m
-  const springStretchM = (springMassG * 0.001 * STANDARD_GRAVITY) / springK;
-  const springStretchCm = springStretchM * 100;
-  const springElasticEnergyJ = 0.5 * springK * springStretchM * springStretchM;
 
   // ================= EXP 00 (KHTN 7): ÂM THANH & ÁNH SÁNG =================
   const [soundFreqHz, setSoundFreqHz] = useState<number>(440); // Hz
@@ -604,107 +561,6 @@ export default function VirtualLabPage() {
               </div>
             )}
 
-            {/* STAGE 0: LỰC & LÒ XO (KHTN 6 PhysiX Native) */}
-            {simEngine === "physix" && activeExp === "spring" && (
-              <div className="relative rounded-2xl bg-white border border-slate-200 shadow-md overflow-hidden p-5 flex flex-col gap-4">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                  <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
-                    <Scale className="w-4 h-4 text-emerald-600" />
-                    <span>THÍ NGHIỆM BIẾN DẠNG LÒ XO &amp; ĐỊNH LUẬT HOOKE (KHTN 6)</span>
-                  </div>
-                  <div className="font-mono text-xs font-bold text-emerald-600">
-                    Δl = {springStretchCm.toFixed(1)} cm | F<sub>dh</sub> = {((springMassG * 0.001) * STANDARD_GRAVITY).toFixed(2)} N
-                  </div>
-                </div>
-
-                <div className="relative w-full h-80 bg-white rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center p-4">
-                  {/* Grid background */}
-                  <div
-                    className="absolute inset-0 opacity-20 pointer-events-none"
-                    style={{
-                      backgroundImage: "radial-gradient(circle at 1px 1px, #059669 1px, transparent 0)",
-                      backgroundSize: "20px 20px",
-                    }}
-                  />
-
-                  {/* Stand & Ruler & Hanging Spring */}
-                  <div className="relative w-72 h-full flex items-start justify-center pt-2">
-                    {/* Stand Beam */}
-                    <div className="absolute top-2 left-4 right-4 h-2.5 bg-slate-700 rounded-full" />
-                    
-                    {/* Ruler on left */}
-                    <div className="absolute left-6 top-5 bottom-4 w-8 bg-amber-50 border border-amber-300 rounded flex flex-col justify-between py-1 px-0.5 text-[8px] font-mono text-slate-600 select-none">
-                      <span>0 cm</span>
-                      <span>5 cm</span>
-                      <span>10 cm</span>
-                      <span>15 cm</span>
-                      <span>20 cm</span>
-                    </div>
-
-                    {/* Spring Coil SVG */}
-                    <div className="flex flex-col items-center mt-3 z-10">
-                      <svg width="40" height={Math.min(180, 80 + springStretchCm * 5)} viewBox="0 0 40 180" className="transition-all duration-200">
-                        <line x1="20" y1="0" x2="20" y2="15" stroke="#475569" strokeWidth="3" />
-                        <path
-                          d={`M20,15 Q35,25 20,35 Q5,45 20,55 Q35,65 20,75 Q5,85 20,95 Q35,105 20,115 Q5,125 20,135 Q35,145 20,155 L20,${Math.min(175, 75 + springStretchCm * 5)}`}
-                          fill="none"
-                          stroke="#059669"
-                          strokeWidth="3.5"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-
-                      {/* Hanging Mass */}
-                      <div className="w-16 h-12 rounded-xl bg-amber-400 border-2 border-amber-600 shadow-md flex flex-col items-center justify-center text-slate-900 font-bold font-mono text-xs -mt-1">
-                        <span>{springMassG} g</span>
-                        <span className="text-[9px] text-amber-900 font-semibold">{((springMassG * 0.001) * STANDARD_GRAVITY).toFixed(2)}N</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Controls */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex justify-between font-bold text-slate-700">
-                      <span>Khối lượng quả cân:</span>
-                      <span className="text-emerald-700 font-mono font-bold">{springMassG} g</span>
-                    </div>
-                    <div className="flex gap-2">
-                      {[50, 100, 150, 200, 250].map((m) => (
-                        <button
-                          key={m}
-                          onClick={() => setSpringMassG(m)}
-                          className={`flex-1 py-1.5 rounded-lg font-mono font-bold text-xs border ${
-                            springMassG === m
-                              ? "bg-emerald-600 text-white border-emerald-600"
-                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                          }`}
-                        >
-                          {m}g
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex justify-between font-bold text-slate-700">
-                      <span>Độ cứng lò xo k:</span>
-                      <span className="text-emerald-700 font-mono font-bold">{springK} N/m</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={15}
-                      max={50}
-                      step={5}
-                      value={springK}
-                      onChange={(e) => setSpringK(Number(e.target.value))}
-                      className="w-full accent-emerald-600 cursor-pointer"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* STAGE 00: ÂM THANH & ÁNH SÁNG (KHTN 7 PhysiX Native) */}
             {simEngine === "physix" && activeExp === "sound_light" && (
@@ -1888,85 +1744,6 @@ export default function VirtualLabPage() {
                   </Link>
                 </div>
 
-                {/* 1. LỚP 6: LÒ XO & LỰC ĐÀN HỒI */}
-                {activeExp === "spring" && (
-                  <>
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-emerald-600 flex flex-col gap-2 shadow-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-sm sm:text-base text-emerald-800">
-                          Biến dạng lò xo &amp; Lực đàn hồi (Định luật Hooke - KHTN 6):
-                        </span>
-                        <span className="text-xs font-mono px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold">
-                          Lớp 6 — Lực &amp; Lò Xo
-                        </span>
-                      </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
-                        <MathView math="\displaystyle F = k \cdot \Delta l = k \cdot |l - l_0|" block />
-                      </div>
-                      <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
-                        Trong đó <MathView math="F" /> là lực đàn hồi của lò xo (<MathView math="\text{N}" />),{" "}
-                        <MathView math="k" /> là độ cứng của lò xo (<MathView math="\text{N/m}" />),{" "}
-                        <MathView math="\Delta l = l - l_0" /> là độ dãn của lò xo (<MathView math="\text{m}" />).
-                      </p>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-amber-500 flex flex-col gap-2 shadow-xs">
-                      <span className="font-extrabold text-sm sm:text-base text-amber-800">
-                        Trọng lượng quả cân &amp; Năng lượng đàn hồi (ISO 80000-3):
-                      </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 space-y-2 text-slate-900">
-                        <div>
-                          <MathView math="\displaystyle W = m \cdot g \implies k \cdot \Delta l = m \cdot g" />
-                        </div>
-                        <div>
-                          <MathView math="\displaystyle W_{\text{t}} = \frac{1}{2} k (\Delta l)^2 \quad (\text{J, Thế năng đàn hồi})" />
-                        </div>
-                      </div>
-                      <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
-                        Tại vị trí cân bằng, lực đàn hồi cân bằng với trọng lượng quả nặng: <MathView math="F_{\text{dh}} = W = m \cdot g" />.
-                      </p>
-                    </div>
-                  </>
-                )}
-
-                {/* 2. LỚP 6: LỰC, LỰC MA SÁT & CHUYỂN ĐỘNG */}
-                {activeExp === "forces_motion" && (
-                  <>
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-emerald-600 flex flex-col gap-2 shadow-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-sm sm:text-base text-emerald-800">
-                          Hợp lực và tác dụng của lực (KHTN 6):
-                        </span>
-                        <span className="text-xs font-mono px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold">
-                          Lớp 6 — Lực &amp; Chuyển Động
-                        </span>
-                      </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900">
-                        <div>
-                          <MathView math="\displaystyle F_{\text{hl}} = F_1 + F_2 \quad (\text{Cùng chiều})" />
-                        </div>
-                        <div>
-                          <MathView math="\displaystyle F_{\text{hl}} = |F_1 - F_2| \quad (\text{Ngược chiều})" />
-                        </div>
-                      </div>
-                      <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
-                        Lực là tác dụng đẩy hoặc kéo của vật này lên vật khác, đơn vị là Niutơn (<MathView math="\text{N}" />). Khi hợp lực <MathView math="F_{\text{hl}} = 0" />, vật đứng yên cân bằng.
-                      </p>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-amber-500 flex flex-col gap-2 shadow-xs">
-                      <span className="font-extrabold text-sm sm:text-base text-amber-800">
-                        Lực cản ma sát và lực kéo chuyển động:
-                      </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
-                        <MathView math="\displaystyle F_{\text{kéo}} - F_{\text{ms}} = m \cdot a \implies F_{\text{kéo}} \ge F_{\text{ms}}" block />
-                      </div>
-                      <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
-                        Lực ma sát xuất hiện ở bề mặt tiếp xúc cản trở chuyển động của vật. Muốn kéo vật chuyển động, lực kéo phải thắng lực ma sát nghỉ cực đại.
-                      </p>
-                    </div>
-                  </>
-                )}
 
                 {/* 3. LỚP 7: SÓNG ÂM THANH */}
                 {activeExp === "sound_light" && (
@@ -2457,34 +2234,6 @@ export default function VirtualLabPage() {
                     </span>
                   </div>
 
-                  {activeExp === "spring" && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Khối lượng quả cân m:</span>
-                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                          {springMassG} g = {(springMassG * 0.001).toFixed(3)} kg
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Trọng lượng quả cân W = m·g:</span>
-                        <span className="font-mono text-emerald-600 font-bold">
-                          {((springMassG * 0.001) * STANDARD_GRAVITY).toFixed(2)} N
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Độ biến dạng dãn Δl = W/k:</span>
-                        <span className="font-mono text-cyan-600 font-bold">
-                          {springStretchCm.toFixed(1)} cm
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Thế năng đàn hồi W_t = ½k(Δl)²:</span>
-                        <span className="font-mono text-amber-600 font-bold">
-                          {springElasticEnergyJ.toFixed(3)} J
-                        </span>
-                      </div>
-                    </>
-                  )}
 
                   {activeExp === "sound_light" && (
                     <>

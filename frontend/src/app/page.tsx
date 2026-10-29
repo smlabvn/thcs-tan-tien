@@ -211,7 +211,7 @@ export default function HomePage() {
                 <span className="w-8 h-[1px] bg-slate-300" />
               </div>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">
-                Lộ Trình Tối Ưu Cấp THCS (Lớp 6, 7, 8, 9)
+                Lộ Trình Tối Ưu Cấp THCS (Lớp 7, 8, 9)
               </h2>
               <p className="text-sm text-slate-600 max-w-xl mt-1 font-normal">
                 Học sâu hiểu bản chất từ thực nghiệm trực quan, tự tin bứt phá điểm 9, điểm 10 trên lớp và thi đỗ vào lớp 10 THPT!
@@ -222,7 +222,6 @@ export default function HomePage() {
             <div className="flex p-1 rounded-xl bg-white border border-slate-200 self-start overflow-x-auto shadow-2xs">
               {[
                 { id: "all", label: "Tất cả THCS" },
-                { id: "6", label: "Lớp 6 — Lực, lò xo & năng lượng" },
                 { id: "7", label: "Lớp 7 — Âm thanh & ánh sáng" },
                 { id: "8", label: "Lớp 8 — Khối lượng riêng, áp suất, lực đẩy, điện & nhiệt" },
                 { id: "9", label: "Lớp 9 — Cơ năng, quang học & điện" },
@@ -242,44 +241,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 4 Grade Cards Bento Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
-            {/* Lớp 6 */}
-            {(selectedGrade === "all" || selectedGrade === "6") && (
-              <div className="rounded-3xl bg-white hover:border-emerald-400 p-6 flex flex-col justify-between transition-all duration-200 border border-slate-200 shadow-xs hover:shadow-md group">
-                <div className="flex flex-col gap-3.5">
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="px-2.5 py-0.5 rounded-full font-mono text-[11px] bg-white border border-emerald-200 text-emerald-800 font-bold whitespace-nowrap shadow-2xs">
-                      Lớp 6 — KHTN
-                    </span>
-                    <span className="font-mono text-[11px] text-slate-500 font-semibold whitespace-nowrap shrink-0">
-                      24 Bài học
-                    </span>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-emerald-700 shadow-2xs">
-                    <Scale className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-900">Lớp 6 — Lực, lò xo và năng lượng</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed font-normal">
-                    Lực tiếp xúc và không tiếp xúc, lực ma sát, biến dạng lò xo F = k &middot; &Delta;l, đo khối lượng riêng &rho; = m/V và năng lượng.
-                  </p>
-                  <div className="py-3 px-3 rounded-2xl bg-white border border-slate-200 text-center shadow-xs flex flex-col items-center justify-center gap-1 min-h-[82px] text-emerald-800">
-                    <div className="text-base sm:text-lg font-bold">
-                      <MathView math="\displaystyle F = k \cdot \Delta l \quad\boldsymbol{\mid}\quad W = m \cdot g" />
-                    </div>
-                    <div className="text-[11px] font-semibold text-slate-500 font-mono">
-                      Biến dạng lò xo (Hooke) &amp; Trọng lượng
-                    </div>
-                  </div>
-                </div>
-                <div className="pt-4 flex items-center justify-between border-t border-slate-100 mt-4">
-                  <Link href="/lab" className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1.5">
-                    <span>Vào Lab Lớp 6</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              </div>
-            )}
+          {/* 3 Grade Cards Bento Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
 
             {/* Lớp 7 */}
             {(selectedGrade === "all" || selectedGrade === "7") && (
