@@ -18,7 +18,7 @@ const SAMPLE_PROMPTS = [
   "Lực đẩy Archimedes chuẩn SI (F_b = ρ·g·V) và điều kiện nổi/chìm theo khối lượng riêng?",
   "Định luật Ôm (I = U/R) và cách tính điện trở tương đương R_eq đoạn mạch?",
   "Phương trình thấu kính mỏng chuẩn quốc tế (1/f = 1/d_o + 1/d_i) và độ phóng đại m?",
-  "Nguyên lý mômen lực (∑M = 0 ⇔ F₁·d₁ = F₂·d₂) và lợi thế cơ học MA của đòn bẩy?",
+  "Quy tắc đòn bẩy (F₁·d₁ = F₂·d₂) và tác dụng làm quay (moment lực) lớp 8?",
 ];
 
 export default function AITutorPage() {

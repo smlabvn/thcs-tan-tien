@@ -116,15 +116,16 @@ PHYSICS_KNOWLEDGE_DOCS = [
         "id": "doc-thcs-08",
         "level": "thcs",
         "grade": 8,
-        "topic": "Nguyên lý mômen lực & Đòn bẩy (Rotational Mechanics)",
-        "title": "Quy tắc mômen lực và Lợi thế cơ học (Mechanical Advantage)",
+        "topic": "Quy tắc đòn bẩy & Tác dụng làm quay (Moment lực)",
+        "title": "Tác dụng làm quay của lực (Moment lực) và Quy tắc thăng bằng đòn bẩy (KHTN 8)",
         "content": (
-            "Mômen của lực quanh trục quay (Moment of Force / Torque): M = F * d (đơn vị SI: N.m), trong đó d là khoảng cách vuông góc từ trục quay đến giá của lực (cánh tay đòn - moment arm). "
-            "Nguyên lý mômen lực (Principle of Moments): Để vật có trục quay cân bằng: Sigma M = 0 <=> M1 = M2 <=> F1 * d1 = F2 * d2. "
-            "Lợi thế cơ học (Mechanical Advantage - MA): MA = F_load / F_effort = d_effort / d_load. "
-            "Nếu d1 > d2 thì MA > 1, đòn bẩy cho ta lợi thế về lực (lực phát động nhỏ hơn tải trọng)."
+            "Tác dụng làm quay của lực (Moment lực) trong KHTN 8: Lực tác dụng lên vật có thể làm quay vật quanh trục hoặc điểm tựa. "
+            "Tác dụng làm quay phụ thuộc vào độ lớn của lực (F) và khoảng cách từ trục quay đến giá của lực (d - cánh tay đòn). Lực càng lớn hoặc khoảng cách càng xa thì tác dụng làm quay càng mạnh. "
+            "Quy tắc đòn bẩy (Điều kiện thăng bằng): F1 * d1 = F2 * d2. "
+            "Ứng dụng đòn bẩy: Khi d1 > d2 thì F1 < F2 (được lợi về lực để nâng vật nặng). "
+            "Lưu ý phân biệt cấp học: Ở THCS Lớp 8, học sinh dừng lại ở việc làm thí nghiệm trực quan để hình dung tác dụng làm quay của lực (moment lực) và quy tắc đòn bẩy; việc tính toán định lượng moment lực M = F * d và điều kiện cân bằng tổng quát Sigma M = 0 thuộc chương trình Vật lí lớp 10."
         ),
-        "source": "Chuẩn Quốc Tế ISO 80000-4 & SGK KHTN 8"
+        "source": "SGK KHTN 8 (GDPT 2018) & ISO 80000-4"
     },
     {
         "id": "doc-thcs-09",

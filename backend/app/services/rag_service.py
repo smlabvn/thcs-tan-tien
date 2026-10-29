@@ -54,7 +54,7 @@ class PhysicsRAGService:
             "- Khối lượng riêng: \\rho (kg/m³); Trọng lượng: W = m·g; Lực đẩy Archimedes: F_b = \\rho·g·V_disp.\n"
             "- Điện trở tương đương: R_eq; Công suất: P = U·I; Nhiệt lượng: Q = I²·R·t.\n"
             "- Thấu kính mỏng: 1/f = 1/d_o + 1/d_i (hoặc 1/f = 1/u + 1/v); Độ phóng đại: m = -d_i / d_o.\n"
-            "- Nguyên lý mômen đòn bẩy: \\sum M = 0 <=> F₁·d₁ = F₂·d₂; Lợi thế cơ học MA = F_load / F_effort.\n"
+            "- Quy tắc đòn bẩy & tác dụng làm quay (moment lực): F₁·d₁ = F₂·d₂ (cân bằng đòn bẩy lớp 8, d₁ > d₂ được lợi về lực; tính toán định lượng moment lực M = F·d và Sigma M = 0 là lớp 10).\n"
             "Sau phần giải thích, hãy trích dẫn nguồn sách hoặc quy chuẩn tham khảo."
         )
 

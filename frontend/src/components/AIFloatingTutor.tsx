@@ -140,7 +140,7 @@ export default function AIFloatingTutor() {
               Thấu kính (1/f = 1/d_o + 1/d_i)
             </button>
             <button
-              onClick={() => handleSend("Nguyên lý mômen lực cân bằng đòn bẩy F1.d1 = F2.d2?")}
+              onClick={() => handleSend("Quy tắc đòn bẩy F1·d1 = F2·d2 và tác dụng làm quay (moment lực)?")}
               className="px-2.5 py-1 rounded-md bg-white text-slate-700 hover:text-emerald-800 shrink-0 border border-slate-200 shadow-2xs font-semibold"
             >
               Đòn bẩy (∑M = 0)

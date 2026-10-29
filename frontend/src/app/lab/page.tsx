@@ -121,10 +121,10 @@ const SIM_DATA: Record<
   lever: {
     grade: 8,
     url: "/sims/balancing-act.html?locale=vi",
-    title: "Thí Nghiệm Cân Bằng Đòn Bẩy & Mômen Lực (Lớp 8)",
+    title: "Thí Nghiệm Quy Tắc Đòn Bẩy & Moment Lực (Lớp 8)",
     subtitle:
-      "Đặt quả cân và người lên các vị trí cánh tay đòn, kiểm tra quy tắc cân bằng mômen lực F₁·d₁ = F₂·d₂ và ứng dụng đòn bẩy",
-    categoryBadge: "Cân Bằng Đòn Bẩy",
+      "Khảo sát tác dụng làm quay của lực (moment lực) và điều kiện thăng bằng của đòn bẩy F₁·d₁ = F₂·d₂ giúp được lợi về lực",
+    categoryBadge: "Quy Tắc Đòn Bẩy",
     gradeBadge: "Lớp 8 — Khối lượng riêng, áp suất, lực đẩy, điện và nhiệt",
   },
   electrostatics: {
@@ -212,7 +212,7 @@ const EXPERIMENTS_CONFIG = [
   {
     id: "lever" as THCSExperimentType,
     grade: "8" as const,
-    name: "6. Quy tắc đòn bẩy & Mômen (Lớp 8)",
+    name: "6. Quy tắc đòn bẩy & Moment lực (Lớp 8)",
     icon: Scale,
   },
   {
@@ -1542,7 +1542,7 @@ export default function VirtualLabPage() {
                     <span>THÍ NGHIỆM QUY TẮC ĐÒN BẨY &amp; CÂN BẰNG LỰC (KHTN 8)</span>
                   </div>
                   <div className="font-mono text-xs font-bold text-emerald-600">
-                    ∑M = 0 ⇔ F₁·d₁ = F₂·d₂ ({(momentLeft * LEVER_TICK_M).toFixed(2)} = {(momentRight * LEVER_TICK_M).toFixed(2)} N·m)
+                    F₁·d₁ = F₂·d₂ ({(momentLeft * LEVER_TICK_M).toFixed(2)} = {(momentRight * LEVER_TICK_M).toFixed(2)} N·m)
                   </div>
                 </div>
 
@@ -1983,36 +1983,68 @@ export default function VirtualLabPage() {
                   </>
                 )}
 
-                {/* 8. LỚP 8: QUY TẮC ĐÒN BẨY & MÔMEN LỰC */}
+                {/* 6. LỚP 8: QUY TẮC ĐÒN BẨY & TÁC DỤNG LÀM QUAY (MOMENT LỰC) */}
                 {activeExp === "lever" && (
                   <>
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-emerald-600 flex flex-col gap-2 shadow-xs">
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-emerald-600 flex flex-col gap-2.5 shadow-xs">
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-sm sm:text-base text-emerald-800">
-                          Nguyên lý mômen lực (Principle of Moments - ISO 80000-4):
+                          Tác dụng làm quay của lực (Moment lực):
                         </span>
                         <span className="text-xs font-mono px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold">
-                          Lớp 8 — Đòn Bẩy
+                          Lớp 8 — KHTN
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
-                        <MathView math="\displaystyle \sum M = 0 \iff F_1 \cdot d_1 = F_2 \cdot d_2" block />
+                      
+                      <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/80 text-xs sm:text-[13px] text-slate-700 leading-relaxed space-y-2">
+                        <p>
+                          Lực tác dụng lên vật có thể làm quay vật quanh trục hoặc điểm tựa cố định. <strong className="text-emerald-900 font-bold">Tác dụng làm quay (moment lực)</strong> càng lớn khi:
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-medium">
+                          <div className="p-2 rounded-lg bg-white border border-emerald-200 flex items-center gap-2">
+                            <span className="text-emerald-700 font-bold">① Độ lớn lực:</span>
+                            <span>Lực càng lớn <MathView math="F \uparrow" /> quay càng mạnh</span>
+                          </div>
+                          <div className="p-2 rounded-lg bg-white border border-emerald-200 flex items-center gap-2">
+                            <span className="text-emerald-700 font-bold">② Cánh tay đòn:</span>
+                            <span>Càng xa trục quay <MathView math="d \uparrow" /> quay càng mạnh</span>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
-                        Trong đó <MathView math="M = F \cdot d" /> là mômen của lực (<MathView math="\text{N}\cdot\text{m}" />), <MathView math="d_1, d_2" /> là cánh tay đòn.
-                      </p>
+
+                      <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 leading-relaxed">
+                        💡 <strong>Lưu ý kiến thức:</strong> Ở Lớp 8, thí nghiệm giúp học sinh <em>trực quan hóa tác dụng làm quay của lực (moment lực)</em> và cơ chế cân bằng. Phần tính toán định lượng lực moment (<MathView math="M = F \cdot d" />, <MathView math="\sum M = 0" />) sẽ được học nâng cao ở môn Vật lí lớp 10.
+                      </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-amber-500 flex flex-col gap-2 shadow-xs">
-                      <span className="font-extrabold text-sm sm:text-base text-amber-800">
-                        Lợi thế cơ học (Mechanical Advantage - MA):
-                      </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
-                        <MathView math="\displaystyle \text{MA} = \frac{F_{\text{load}}}{F_{\text{effort}}} = \frac{d_1}{d_2}" block />
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-cyan-600 flex flex-col gap-2 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-sm sm:text-base text-cyan-900">
+                          Quy tắc đòn bẩy &amp; Lợi ích về lực:
+                        </span>
+                        <span className="text-xs font-mono px-2.5 py-0.5 rounded-md bg-cyan-100 text-cyan-800 font-bold">
+                          F₁·d₁ = F₂·d₂
+                        </span>
                       </div>
-                      <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
-                        Nếu <MathView math="d_1 > d_2 \implies \text{MA} > 1" />, ta được lợi về lực để nâng vật nặng.
+
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-cyan-800 overflow-x-auto whitespace-nowrap">
+                        <MathView math="\displaystyle F_1 \cdot d_1 = F_2 \cdot d_2" block />
+                      </div>
+
+                      <p className="text-xs sm:text-[13px] text-slate-600 leading-relaxed">
+                        Đòn bẩy ở trạng thái thăng bằng khi tích độ lớn lực và khoảng cách đến điểm tựa ở hai bên cân bằng nhau.
                       </p>
+
+                      <div className="grid grid-cols-1 gap-1.5 mt-1">
+                        <div className="p-2 rounded-lg bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950 flex items-center justify-between">
+                          <span>Khi khoảng cách đến lực dài hơn vật nâng (<MathView math="d_1 > d_2" />):</span>
+                          <span className="font-bold px-2 py-0.5 rounded bg-emerald-200 text-emerald-900 text-[11px] whitespace-nowrap">ĐƯỢC LỢI VỀ LỰC (F₁ &lt; F₂)</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 flex items-center justify-between">
+                          <span>Khi khoảng cách đến lực ngắn hơn vật (<MathView math="d_1 < d_2" />):</span>
+                          <span className="font-medium px-2 py-0.5 rounded bg-slate-200 text-slate-800 text-[11px] whitespace-nowrap">Lợi về quãng đường &amp; thao tác</span>
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}
@@ -2374,15 +2406,15 @@ export default function VirtualLabPage() {
                   {activeExp === "lever" && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Mômen trái M₁ = F₁·d₁:</span>
+                        <span className="text-slate-500">Tác dụng làm quay trái (Moment):</span>
                         <span className="font-mono font-bold text-blue-600">{(momentLeft * LEVER_TICK_M).toFixed(2)} N·m</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Mômen phải M₂ = F₂·d₂:</span>
+                        <span className="text-slate-500">Tác dụng làm quay phải (Moment):</span>
                         <span className="font-mono font-bold text-emerald-600">{(momentRight * LEVER_TICK_M).toFixed(2)} N·m</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Lợi thế cơ học MA = d₁/d₂:</span>
+                        <span className="text-slate-500">Tỉ lệ khoảng cách (d₁/d₂):</span>
                         <span className="font-mono font-bold">{(leverArmLeft / leverArmRight).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">

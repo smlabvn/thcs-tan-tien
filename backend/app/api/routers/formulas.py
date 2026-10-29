@@ -225,19 +225,19 @@ DEFAULT_FORMULAS: List[dict] = [
         "id": "lever",
         "grade": 8,
         "category": "co",
-        "name": "Nguyên lý mômen lực & Cân bằng đòn bẩy",
+        "name": "Quy tắc đòn bẩy & Moment lực",
         "intlMath": r"\sum M = 0 \iff F_1 \cdot d_1 = F_2 \cdot d_2",
         "vnMath": r"F_1 \cdot d_1 = F_2 \cdot d_2",
         "intlVariables": [
-            {"symbol": "M", "unit": "N·m", "name": "Mômen lực (M = F · d)"},
+            {"symbol": "M", "unit": "N·m", "name": "Moment của lực (M = F · d - Vật lí 10)"},
             {"symbol": "F_1, F_2", "unit": "N", "name": "Các lực tác dụng ở hai đầu đòn bẩy"},
-            {"symbol": "d_1, d_2", "unit": "m", "name": "Cánh tay đòn (từ trục quay đến giá lực)"}
+            {"symbol": "d_1, d_2", "unit": "m", "name": "Cánh tay đòn (khoảng cách từ trục quay đến giá lực)"}
         ],
         "vnVariables": [
             {"symbol": "F_1, F_2", "unit": "N", "name": "Lực tác dụng ở hai phía điểm tựa"},
-            {"symbol": "d_1, d_2", "unit": "m", "name": "Cánh tay đòn của các lực"}
+            {"symbol": "d_1, d_2", "unit": "m", "name": "Khoảng cách từ điểm tựa đến giá của lực (cánh tay đòn)"}
         ],
-        "explanation": "Đòn bẩy cân bằng khi tổng mômen làm quay theo chiều kim đồng hồ bằng tổng mômen ngược chiều. Lợi thế cơ học MA = d1/d2.",
+        "explanation": "Ở Lớp 8, học sinh nhận biết tác dụng làm quay (moment lực) và quy tắc thăng bằng đòn bẩy F₁·d₁ = F₂·d₂ giúp được lợi về lực khi d₁ > d₂. Việc tính toán định lượng moment lực M = F·d sẽ học ở lớp 10.",
         "latexCode": r"F_1 \cdot d_1 = F_2 \cdot d_2",
         "isCustom": False
     },
