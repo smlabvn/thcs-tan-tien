@@ -63,6 +63,25 @@ export default function AITutorPage() {
     const q = (queryText || input).trim();
     if (!q || loading) return;
 
+    // Tự động nhận diện nếu người dùng dán Gemini API Key trực tiếp vào ô chat
+    if (q.startsWith("AIzaSy") || (q.length >= 35 && /^[A-Za-z0-9_-]{35,}$/.test(q))) {
+      setApiKey(q);
+      try {
+        localStorage.setItem("physix_gemini_api_key", q);
+      } catch {}
+      setInput("");
+      setMessages([
+        ...messages,
+        { sender: "user", text: "🔑 Cài đặt Gemini API Key: " + q.substring(0, 10) + "••••••••••••••••••••" },
+        {
+          sender: "ai",
+          text: "🎉 **Đã kích hoạt thành công Google Gemini API!**\n\nKhóa API của bạn đã được kết nối và lưu an toàn trên trình duyệt. Từ bây giờ, Gia Sư AI THCS Tây Tiến sẽ sử dụng trực tiếp trí tuệ nhân tạo Google Gemini kết hợp kho dữ liệu KHTN THCS để giải đáp mọi bài tập và hiện tượng vật lý chuyên sâu cho bạn. Hãy đặt câu hỏi tiếp theo nhé!",
+          provider: "Google Gemini Activated (THCS Tây Tiến)",
+        },
+      ]);
+      return;
+    }
+
     const newMessages: Message[] = [...messages, { sender: "user", text: q }];
     setMessages(newMessages);
     setInput("");
@@ -171,6 +190,31 @@ export default function AITutorPage() {
               >
                 <div className="whitespace-pre-wrap">{msg.text}</div>
 
+                {/* Inline Action if fallback message */}
+                {msg.text.includes("Cài đặt Gemini API Key") && (
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        setTempKeyInput(apiKey);
+                        setIsKeyModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs transition-colors cursor-pointer"
+                    >
+                      <Key className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Bấm vào đây để dán API Key</span>
+                    </button>
+                    <a
+                      href="https://aistudio.google.com/app/apikey"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-emerald-700 hover:underline inline-flex items-center gap-1 font-medium"
+                    >
+                      <span>Lấy key miễn phí (Google AI Studio)</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
+
                 {/* Sources Citation */}
                 {msg.sources && msg.sources.length > 0 && (
                   <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500 flex flex-col gap-1.5 font-mono">
@@ -228,6 +272,35 @@ export default function AITutorPage() {
 
         {/* Input Bar */}
         <div className="pt-3 border-t border-slate-200">
+          {/* Quick API Key banner if not entered */}
+          {!apiKey && (
+            <div className="mb-2 p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 text-amber-900">
+                <Key className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  <strong>Chưa kết nối Gemini API:</strong> Dán mã API Key vào đây để kích hoạt AI trả lời mọi câu hỏi:
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-1 min-w-[260px] max-w-md">
+                <input
+                  type="password"
+                  placeholder="Dán mã AIzaSy... vào đây"
+                  value={tempKeyInput}
+                  onChange={(e) => setTempKeyInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveApiKey()}
+                  className="flex-1 bg-white border border-amber-300 rounded-lg px-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:border-emerald-600 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveApiKey}
+                  className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 shadow-2xs cursor-pointer"
+                >
+                  Lưu Key
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 bg-white rounded-2xl border border-slate-200 p-1.5 shadow-sm focus-within:border-emerald-600 transition-colors">
             <input
               type="text"

@@ -35,6 +35,23 @@ export default function AIFloatingTutor() {
     const q = (customText || query).trim();
     if (!q || loading) return;
 
+    // Tự động nhận diện nếu người dùng dán API Key trực tiếp vào ô chat
+    if (q.startsWith("AIzaSy") || (q.length >= 35 && /^[A-Za-z0-9_-]{35,}$/.test(q))) {
+      try {
+        localStorage.setItem("physix_gemini_api_key", q);
+      } catch {}
+      setQuery("");
+      setMessages([
+        ...messages,
+        { sender: "user", text: "🔑 Cài đặt Gemini API Key: " + q.substring(0, 10) + "••••••••••••••••••••" },
+        {
+          sender: "ai",
+          text: "🎉 **Đã kích hoạt thành công Google Gemini API!**\n\nKhóa API đã được lưu an toàn trong trình duyệt. Từ bây giờ bạn có thể hỏi bất kỳ câu hỏi nào về Vật lý KHTN THCS Tây Tiến để nhận câu trả lời phân tích chuyên sâu nhé!",
+        },
+      ]);
+      return;
+    }
+
     const newMsgs: Message[] = [...messages, { sender: "user", text: q }];
     setMessages(newMsgs);
     setQuery("");
