@@ -1833,7 +1833,7 @@ export default function VirtualLabPage() {
                   </>
                 )}
 
-                {/* 5. LỚP 7: TỪ TRƯỜNG & KIM LA BÀN */}
+                {/* 3. LỚP 7: TỪ TRƯỜNG & KIM LA BÀN */}
                 {activeExp === "magnet" && (
                   <>
                     <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-indigo-600 flex flex-col gap-2 shadow-xs">
@@ -1845,8 +1845,15 @@ export default function VirtualLabPage() {
                           Lớp 7 — Từ Trường
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
-                        <MathView math="\displaystyle \text{Vào cực Nam (S) } \longrightarrow \text{ Ra cực Bắc (N)}" block />
+                      <div className="py-3.5 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto flex flex-col sm:flex-row items-center justify-center gap-2">
+                        <span className="text-sm sm:text-base text-indigo-700 font-bold px-3 py-1 bg-indigo-50 rounded-lg border border-indigo-200 whitespace-nowrap">
+                          Vào cực Nam (<MathView math="\text{S}" />)
+                        </span>
+                        <span className="text-slate-400 font-bold text-lg hidden sm:inline">⟶</span>
+                        <span className="text-slate-400 font-bold text-sm sm:hidden">↓</span>
+                        <span className="text-sm sm:text-base text-rose-700 font-bold px-3 py-1 bg-rose-50 rounded-lg border border-rose-200 whitespace-nowrap">
+                          Ra cực Bắc (<MathView math="\text{N}" />)
+                        </span>
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
                         Bên ngoài nam châm, các đường sức từ là những đường cong khép kín đi ra từ cực Bắc (<MathView math="\text{N}" />) và đi vào cực Nam (<MathView math="\text{S}" />).
@@ -1857,12 +1864,18 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Tương tác giữa các cực từ của nam châm:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-base sm:text-lg font-bold my-1 space-y-2 text-slate-900">
-                        <div>
-                          <MathView math="\displaystyle \text{Cùng cực: } \text{N} \leftrightarrow \text{N} \; , \; \text{S} \leftrightarrow \text{S} \implies \text{ĐẨY NHAU}" />
+                      <div className="py-3 px-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2">
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200 flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="text-slate-700 font-bold">Cùng cực (<MathView math="\text{N} \leftrightarrow \text{N}" />, <MathView math="\text{S} \leftrightarrow \text{S}" />):</span>
+                          <span className="px-2.5 py-0.5 rounded bg-amber-100 text-amber-800 font-extrabold text-xs font-mono">
+                            ĐẨY NHAU
+                          </span>
                         </div>
-                        <div>
-                          <MathView math="\displaystyle \text{Khác cực: } \text{N} \leftrightarrow \text{S} \implies \text{HÚT NHAU}" />
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200 flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="text-slate-700 font-bold">Khác cực (<MathView math="\text{N} \leftrightarrow \text{S}" />):</span>
+                          <span className="px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold text-xs font-mono">
+                            HÚT NHAU
+                          </span>
                         </div>
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
@@ -1884,7 +1897,7 @@ export default function VirtualLabPage() {
                           Lớp 8 — Thủy Tĩnh
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 space-y-2 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
                         <div>
                           <MathView math="\displaystyle \rho = \frac{m}{V} \quad (\text{kg/m}^3)" />
                         </div>
@@ -1901,7 +1914,7 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Điều kiện vật chìm, nổi và lơ lửng:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-base sm:text-lg font-bold my-1 space-y-2 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-sm sm:text-base font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
                         <div>
                           <MathView math="\displaystyle \rho_{\text{vật}} < \rho_{\text{lỏng}} \implies F_{\text{A}} > W \implies \text{VẬT NỔI}" />
                         </div>
@@ -1928,7 +1941,7 @@ export default function VirtualLabPage() {
                           Lớp 8 — Áp Suất
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900 overflow-x-auto">
                         <MathView math="\displaystyle p = d \cdot h = \rho \cdot g \cdot h" block />
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
@@ -2070,8 +2083,13 @@ export default function VirtualLabPage() {
                           Lớp 9 — Điện Học
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
-                        <MathView math="\displaystyle I = \frac{U}{R} \iff U = I \cdot R \iff R = \frac{U}{I}" block />
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-1.5">
+                        <div className="text-2xl sm:text-3xl text-emerald-700">
+                          <MathView math="\displaystyle I = \frac{U}{R}" />
+                        </div>
+                        <div className="text-xs sm:text-sm text-slate-600 font-mono">
+                          <MathView math="\displaystyle \iff U = I \cdot R \quad \iff \quad R = \frac{U}{I}" />
+                        </div>
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
                         Cường độ dòng điện <MathView math="I" /> (<MathView math="\text{A}" />) tỉ lệ thuận với hiệu điện thế <MathView math="U" /> (<MathView math="\text{V}" />) và tỉ lệ nghịch với điện trở <MathView math="R" /> (<MathView math="\Omega" />).
@@ -2082,7 +2100,7 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Công suất điện &amp; Điện năng tiêu thụ (Joule):
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 space-y-2 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
                         <div>
                           <MathView math="\displaystyle \mathcal{P} = U \cdot I = I^2 \cdot R = \frac{U^2}{R} \quad (\text{W, Oát})" />
                         </div>
