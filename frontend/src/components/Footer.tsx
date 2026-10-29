@@ -18,7 +18,7 @@ export default function Footer() {
           <Link href="/iot" className="hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">Cảm biến IoT</Link>
           <Link href="/ai-tutor" className="hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">Gia sư AI THCS</Link>
           <Link href="/quiz" className="hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">Đề khảo sát Vào 10</Link>
-          <span>© 2026 SMLab KHKT</span>
+          <span>© 2026 THCS Tây Tiến</span>
         </div>
       </div>
     </footer>
