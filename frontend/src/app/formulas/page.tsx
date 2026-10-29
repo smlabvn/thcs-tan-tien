@@ -1089,7 +1089,7 @@ export default function FormulasPage() {
                   </div>
                 </div>
 
-                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-2xs text-xs font-mono space-y-1">
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-2xs text-xs font-mono space-y-1 overflow-x-auto">
                   <div className="text-slate-500 font-bold">Thế số chuẩn SI:</div>
                   <div>
                     <MathView math={`I = \\frac{${adjVoltage}\\text{ V}}{${adjResistance}\\text{ }\\Omega} = ${adjCurrent.toFixed(3)}\\text{ A}`} />
@@ -1245,7 +1245,7 @@ export default function FormulasPage() {
                   </div>
                 </div>
 
-                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-2xs text-[11px] font-mono space-y-1">
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-2xs text-[11px] font-mono space-y-1 overflow-x-auto">
                   <div className="text-slate-500 font-bold">Thế số chuẩn SI:</div>
                   <div>
                     <MathView math={`F_{\\text{b}} = \\rho \\cdot g \\cdot V_{\\text{disp}} = ${adjFluidRho} \\times 9.807 \\times ${adjDispM3.toFixed(6)} = ${adjFb.toFixed(3)}\\text{ N}`} />
@@ -1380,7 +1380,7 @@ export default function FormulasPage() {
                   </div>
                 </div>
 
-                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-2xs text-[11px] font-mono space-y-1">
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-2xs text-[11px] font-mono space-y-1 overflow-x-auto">
                   <div className="text-slate-500 font-bold">Thế số phương trình thấu kính:</div>
                   <div>
                     <MathView
@@ -1488,7 +1488,7 @@ export default function FormulasPage() {
                   </div>
                 </div>
 
-                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-2xs text-xs font-mono space-y-1">
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-2xs text-xs font-mono space-y-1 overflow-x-auto">
                   <div className="text-slate-500 font-bold">Thế số chuẩn SI:</div>
                   <div>
                     <MathView math={`F_2 = \\frac{F_1 \\cdot d_1}{d_2} = \\frac{${adjLeverF1} \\times ${adjLeverD1.toFixed(2)}}{${adjLeverD2.toFixed(2)}} = ${adjLeverF2.toFixed(2)}\\text{ N}`} />
@@ -1566,7 +1566,7 @@ export default function FormulasPage() {
                   </div>
                 </div>
 
-                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-2xs text-xs font-mono space-y-1">
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-2xs text-xs font-mono space-y-1 overflow-x-auto">
                   <div className="text-slate-500 font-bold">Thế số chuẩn SI:</div>
                   <div>
                     <MathView math={`\\rho = \\frac{m}{V} = \\frac{${adjMassKg.toFixed(2)}}{${adjVolumeM3}} = ${adjDensityCalc.toFixed(1)}\\text{ kg/m}^3`} />
