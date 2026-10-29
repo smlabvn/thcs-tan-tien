@@ -15,6 +15,7 @@ export default function MathView({ math, block = false, className = "" }: MathVi
       return katex.renderToString(math, {
         displayMode: block,
         throwOnError: false,
+        strict: "ignore",
       });
     } catch (e) {
       return math;
@@ -23,7 +24,7 @@ export default function MathView({ math, block = false, className = "" }: MathVi
 
   return (
     <span
-      className={`inline-block font-mono ${className}`}
+      className={`inline-block font-mono whitespace-nowrap ${className}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

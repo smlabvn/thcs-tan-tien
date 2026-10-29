@@ -1897,16 +1897,17 @@ export default function VirtualLabPage() {
                           Lớp 8 — Thủy Tĩnh
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
-                        <div>
-                          <MathView math="\displaystyle \rho = \frac{m}{V} \quad (\text{kg/m}^3)" />
+                      <div className="py-3.5 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2">
+                        <div className="text-xl sm:text-2xl text-cyan-800 whitespace-nowrap">
+                          <MathView math="\displaystyle \rho = \frac{m}{V}" />
+                          <span className="text-xs sm:text-sm font-normal text-slate-500 ml-2 font-mono">(kg/m³)</span>
                         </div>
-                        <div>
-                          <MathView math="\displaystyle F_{\text{A}} = d \cdot V = \rho_{\text{chất lỏng}} \cdot g \cdot V_{\text{chiếm chỗ}}" />
+                        <div className="text-lg sm:text-xl text-cyan-700 whitespace-nowrap">
+                          <MathView math="\displaystyle F_{\text{A}} = d \cdot V = \rho \cdot g \cdot V" />
                         </div>
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
-                        Lực đẩy Ác-si-mét hướng thẳng đứng từ dưới lên, có độ lớn bằng trọng lượng phần chất lỏng bị vật chiếm chỗ.
+                        Lực đẩy Ác-si-mét hướng thẳng đứng từ dưới lên; <MathView math="d = \rho \cdot g" /> là trọng lượng riêng chất lỏng (<MathView math="\text{N/m}^3" />), <MathView math="V" /> là thể tích phần chất lỏng bị vật chiếm chỗ (<MathView math="\text{m}^3" />).
                       </p>
                     </div>
 
@@ -1914,15 +1915,32 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Điều kiện vật chìm, nổi và lơ lửng:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-sm sm:text-base font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
-                        <div>
-                          <MathView math="\displaystyle \rho_{\text{vật}} < \rho_{\text{lỏng}} \implies F_{\text{A}} > W \implies \text{VẬT NỔI}" />
+                      <div className="py-3 px-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2">
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50/70 border border-emerald-200 flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="font-mono text-emerald-900 font-bold">
+                            <MathView math="F_{\text{A}} > P \iff \rho_{\text{chất lỏng}} > \rho_{\text{vật}}" />
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded bg-emerald-200 text-emerald-900 font-extrabold text-xs font-mono">
+                            VẬT NỔI
+                          </span>
                         </div>
-                        <div>
-                          <MathView math="\displaystyle \rho_{\text{vật}} = \rho_{\text{lỏng}} \implies F_{\text{A}} = W \implies \text{LƠ LỬNG}" />
+
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-blue-50/70 border border-blue-200 flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="font-mono text-blue-900 font-bold">
+                            <MathView math="F_{\text{A}} = P \iff \rho_{\text{chất lỏng}} = \rho_{\text{vật}}" />
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded bg-blue-200 text-blue-900 font-extrabold text-xs font-mono">
+                            LƠ LỬNG
+                          </span>
                         </div>
-                        <div>
-                          <MathView math="\displaystyle \rho_{\text{vật}} > \rho_{\text{lỏng}} \implies F_{\text{A}} < W \implies \text{VẬT CHÌM}" />
+
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-rose-50/70 border border-rose-200 flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="font-mono text-rose-900 font-bold">
+                            <MathView math="F_{\text{A}} < P \iff \rho_{\text{chất lỏng}} < \rho_{\text{vật}}" />
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded bg-rose-200 text-rose-900 font-extrabold text-xs font-mono">
+                            VẬT CHÌM
+                          </span>
                         </div>
                       </div>
                     </div>
