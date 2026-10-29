@@ -2150,42 +2150,64 @@ export default function VirtualLabPage() {
                   </>
                 )}
 
-                {/* 11. LỚP 9: ĐỊNH LUẬT ÔM & MẠCH DC */}
+                {/* 9. LỚP 9: ĐỊNH LUẬT ÔM & MẠCH DC */}
                 {activeExp === "ohm" && (
                   <>
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-emerald-600 flex flex-col gap-2 shadow-xs">
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-emerald-600 flex flex-col gap-2.5 shadow-xs">
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-sm sm:text-base text-emerald-800">
-                          Định luật Ôm cho đoạn mạch (IEC 60027 / KHTN 9):
+                          Định luật Ôm cho đoạn mạch (KHTN 9):
                         </span>
                         <span className="text-xs font-mono px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold">
                           Lớp 9 — Điện Học
                         </span>
                       </div>
-                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-1.5">
-                        <div className="text-2xl sm:text-3xl text-emerald-700">
+
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2">
+                        <div className="text-2xl sm:text-3xl text-emerald-700 whitespace-nowrap">
                           <MathView math="\displaystyle I = \frac{U}{R}" />
                         </div>
-                        <div className="text-xs sm:text-sm text-slate-600 font-mono">
-                          <MathView math="\displaystyle \iff U = I \cdot R \quad \iff \quad R = \frac{U}{I}" />
+                        <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                          <div className="p-2 rounded-lg bg-emerald-50/70 border border-emerald-200/80 text-emerald-900 font-mono whitespace-nowrap">
+                            <span className="text-[11px] text-slate-500 block">Hiệu điện thế:</span>
+                            <MathView math="U = I \cdot R" />
+                          </div>
+                          <div className="p-2 rounded-lg bg-emerald-50/70 border border-emerald-200/80 text-emerald-900 font-mono whitespace-nowrap">
+                            <span className="text-[11px] text-slate-500 block">Điện trở:</span>
+                            <MathView math="\displaystyle R = \frac{U}{I}" />
+                          </div>
                         </div>
                       </div>
+
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
                         Cường độ dòng điện <MathView math="I" /> (<MathView math="\text{A}" />) tỉ lệ thuận với hiệu điện thế <MathView math="U" /> (<MathView math="\text{V}" />) và tỉ lệ nghịch với điện trở <MathView math="R" /> (<MathView math="\Omega" />).
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-amber-500 flex flex-col gap-2 shadow-xs">
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-amber-500 flex flex-col gap-2.5 shadow-xs">
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
-                        Công suất điện &amp; Điện năng tiêu thụ (Joule):
+                        Công suất điện &amp; Điện năng tiêu thụ:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
-                        <div>
-                          <MathView math="\displaystyle \mathcal{P} = U \cdot I = I^2 \cdot R = \frac{U^2}{R} \quad (\text{W, Oát})" />
+
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2.5">
+                        <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-200/80 flex items-center justify-between flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="text-xs text-amber-900 font-medium">Công suất điện tiêu thụ:</span>
+                          <span className="font-mono text-amber-900 font-bold whitespace-nowrap">
+                            <MathView math="\displaystyle \mathcal{P} = U \cdot I = \frac{U^2}{R} \quad (\text{W})" />
+                          </span>
                         </div>
-                        <div>
-                          <MathView math="\displaystyle A = \mathcal{P} \cdot t = U \cdot I \cdot t \quad (\text{J hoặc kW}\cdot\text{h})" />
+
+                        <div className="p-2 rounded-lg bg-sky-50/70 border border-sky-200/80 flex items-center justify-between flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="text-xs text-sky-900 font-medium">Điện năng tiêu thụ (Công A):</span>
+                          <span className="font-mono text-sky-900 font-bold whitespace-nowrap">
+                            <MathView math="\displaystyle A = \mathcal{P} \cdot t = U \cdot I \cdot t \quad (\text{J})" />
+                          </span>
                         </div>
+                      </div>
+
+                      <div className="px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between font-mono">
+                        <span>Quy đổi điện năng gia dụng:</span>
+                        <span className="font-bold text-slate-800">1 kW·h = 3.600.000 J (1 số điện)</span>
                       </div>
                     </div>
                   </>
@@ -2220,8 +2242,13 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Định luật bảo toàn cơ năng (Bỏ qua ma sát):
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900 overflow-x-auto">
-                        <MathView math="\displaystyle W = W_{\text{đ}} + W_{\text{t}} = \frac{1}{2} m v^2 + m g h = \text{const}" block />
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-1.5">
+                        <div className="text-xl sm:text-2xl text-rose-700 whitespace-nowrap">
+                          <MathView math="\displaystyle W = W_{\text{đ}} + W_{\text{t}} = \text{const}" />
+                        </div>
+                        <div className="text-xs sm:text-sm text-slate-600 font-mono whitespace-nowrap">
+                          <MathView math="\displaystyle W = \frac{1}{2} m v^2 + m \cdot g \cdot h" />
+                        </div>
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
                         Khi vật chuyển động chỉ chịu tác dụng của trọng lực, cơ năng được bảo toàn. Động năng tăng thì thế năng giảm và ngược lại.
@@ -2254,8 +2281,14 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Định luật cảm ứng Faraday &amp; Máy phát điện:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900 overflow-x-auto">
-                        <MathView math="\displaystyle e_{\text{c}} = -\frac{\Delta \Phi}{\Delta t} \implies I_{\text{c}} = \frac{e_{\text{c}}}{R}" block />
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-1.5">
+                        <div className="text-xl sm:text-2xl text-purple-700 whitespace-nowrap">
+                          <MathView math="\displaystyle e_{\text{c}} = -\frac{\Delta \Phi}{\Delta t}" />
+                        </div>
+                        <div className="text-xs sm:text-sm text-slate-600 font-mono whitespace-nowrap">
+                          <span className="text-slate-500 mr-1.5 font-normal">Dòng điện cảm ứng:</span>
+                          <MathView math="\displaystyle I_{\text{c}} = \frac{e_{\text{c}}}{R}" />
+                        </div>
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
                         Độ lớn của suất điện động cảm ứng tỉ lệ với tốc độ biến thiên của từ thông qua mạch. Đây là nguyên lý hoạt động của máy phát điện xoay chiều.
