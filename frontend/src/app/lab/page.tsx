@@ -2024,8 +2024,13 @@ export default function VirtualLabPage() {
                           Lớp 7 — Quang Học
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
-                        <MathView math="\displaystyle i' = i \quad (\text{Góc phản xạ bằng góc tới})" block />
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto flex flex-col items-center justify-center gap-1.5">
+                        <div className="text-2xl sm:text-3xl text-teal-700">
+                          <MathView math="\displaystyle i' = i" />
+                        </div>
+                        <div className="text-xs sm:text-sm font-semibold text-slate-600">
+                          (Góc phản xạ <MathView math="i'" /> bằng góc tới <MathView math="i" />)
+                        </div>
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
                         Tia phản xạ nằm trong mặt phẳng tới và ở bên kia pháp tuyến so với tia tới; góc phản xạ <MathView math="i'" /> luôn bằng góc tới <MathView math="i" />.
@@ -2036,8 +2041,13 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Định luật khúc xạ ánh sáng (Snell - KHTN 9):
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
-                        <MathView math="\displaystyle n_1 \cdot \sin(i) = n_2 \cdot \sin(r) \iff \frac{\sin(i)}{\sin(r)} = \frac{n_2}{n_1}" block />
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2">
+                        <div className="text-lg sm:text-2xl text-amber-700">
+                          <MathView math="\displaystyle n_1 \cdot \sin(i) = n_2 \cdot \sin(r)" />
+                        </div>
+                        <div className="text-base sm:text-xl text-slate-700">
+                          <MathView math="\displaystyle \iff \frac{\sin(i)}{\sin(r)} = \frac{n_2}{n_1} = n_{21}" />
+                        </div>
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
                         Khi ánh sáng truyền từ môi trường có chiết suất <MathView math="n_1" /> sang môi trường chiết suất <MathView math="n_2" />, tia sáng bị đổi phương truyền tại mặt phân cách.
@@ -2247,7 +2257,7 @@ export default function VirtualLabPage() {
                           Lớp 9 — Quang Hình
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 text-slate-900 overflow-x-auto">
                         <MathView math="\displaystyle \frac{1}{f} = \frac{1}{d_o} + \frac{1}{d_i} \implies d_i = \frac{d_o \cdot f}{d_o - f}" block />
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
