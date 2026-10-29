@@ -1757,7 +1757,7 @@ export default function VirtualLabPage() {
                           Lớp 7 — Âm Thanh
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 space-y-2 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
                         <div>
                           <MathView math="\displaystyle v = \frac{\lambda}{T} = \lambda \cdot f" />
                         </div>
@@ -1774,7 +1774,7 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Mối liên hệ giữa tần số &amp; Độ cao / Độ to của âm:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
                         <div>
                           <MathView math="\displaystyle f = \frac{n}{t} \quad (\text{Hz, Tần số dao động})" />
                         </div>
@@ -1971,7 +1971,7 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Áp suất tổng hợp &amp; Nguyên lý bình thông nhau:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
                         <div>
                           <MathView math="\displaystyle p_{\text{tổng}} = p_0 + \rho \cdot g \cdot h \quad (\text{Áp suất đáy})" />
                         </div>
@@ -2085,38 +2085,67 @@ export default function VirtualLabPage() {
                   </>
                 )}
 
-                {/* 10. LỚP 9: THẤU KÍNH HỘI TỤ & PHÂN KÌ */}
+                {/* 8. LỚP 9: THẤU KÍNH HỘI TỤ & PHÂN KÌ */}
                 {activeExp === "lens" && (
                   <>
                     <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-sky-600 flex flex-col gap-2 shadow-xs">
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-sm sm:text-base text-sky-800">
-                          Công thức Thấu kính mỏng Gauss (KHTN 9 / ISO 80000-7):
+                          Công thức Thấu kính mỏng (KHTN 9):
                         </span>
                         <span className="text-xs font-mono px-2.5 py-0.5 rounded-md bg-sky-100 text-sky-800 font-bold">
                           Lớp 9 — Quang Hình
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 text-slate-900 overflow-x-auto">
-                        <MathView math="\displaystyle \frac{1}{f} = \frac{1}{d_o} + \frac{1}{d_i} \implies d_i = \frac{d_o \cdot f}{d_o - f}" block />
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2">
+                        <div className="text-xl sm:text-2xl text-sky-700 whitespace-nowrap">
+                          <MathView math="\displaystyle \frac{1}{f} = \frac{1}{d_o} + \frac{1}{d_i}" />
+                        </div>
+                        <div className="text-base sm:text-lg text-slate-700 whitespace-nowrap">
+                          <span className="text-xs font-normal text-slate-500 mr-2">Khoảng cách ảnh:</span>
+                          <MathView math="\displaystyle d_i = \frac{d_o \cdot f}{d_o - f}" />
+                        </div>
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
                         Trong đó <MathView math="f" /> là tiêu cự (<MathView math="\text{cm}" />), <MathView math="d_o" /> là khoảng cách từ vật đến quang tâm, <MathView math="d_i" /> là khoảng cách từ ảnh đến quang tâm.
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-amber-500 flex flex-col gap-2 shadow-xs">
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-amber-500 flex flex-col gap-2.5 shadow-xs">
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
-                        Độ phóng đại ảnh &amp; Độ tụ:
+                        Tỉ lệ chiều cao ảnh &amp; Độ tụ thấu kính:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 space-y-2 text-slate-900">
-                        <div>
-                          <MathView math="\displaystyle m = -\frac{d_i}{d_o} = \frac{h_i}{h_o} \quad ; \quad D = \frac{1}{f} \quad (\text{dp, Đi-ốp})" />
+                      
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2.5">
+                        <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-200/80 flex items-center justify-between flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="text-xs text-amber-900 font-medium">Tỉ lệ chiều cao ảnh / vật:</span>
+                          <span className="font-mono text-amber-900 font-bold whitespace-nowrap">
+                            <MathView math="\displaystyle \frac{h_i}{h_o} = \frac{d_i}{d_o}" />
+                          </span>
+                        </div>
+
+                        <div className="p-2 rounded-lg bg-sky-50/70 border border-sky-200/80 flex items-center justify-between flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="text-xs text-sky-900 font-medium">Độ tụ thấu kính (<MathView math="f" /> tính bằng mét):</span>
+                          <span className="font-mono text-sky-900 font-bold whitespace-nowrap">
+                            <MathView math="\displaystyle D = \frac{1}{f} \quad (\text{dp, Đi-ốp})" />
+                          </span>
                         </div>
                       </div>
-                      <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
-                        Khi <MathView math="d_o > f" /> ta thu được ảnh THẬT, ngược chiều; khi <MathView math="d_o < f" /> ta thu được ảnh ẢO, cùng chiều lớn hơn vật.
-                      </p>
+
+                      <div className="grid grid-cols-1 gap-1.5 mt-0.5">
+                        <div className="p-2 rounded-lg bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950 flex items-center justify-between">
+                          <span>Khi <MathView math="d_o > f" /> (vật ngoài tiêu cự):</span>
+                          <span className="font-bold px-2 py-0.5 rounded bg-emerald-200 text-emerald-900 text-[11px] whitespace-nowrap">ẢNH THẬT, ngược chiều</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-amber-50/80 border border-amber-200 text-xs text-amber-950 flex items-center justify-between">
+                          <span>Khi <MathView math="d_o < f" /> (vật trong tiêu cự):</span>
+                          <span className="font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900 text-[11px] whitespace-nowrap">ẢNH ẢO, cùng chiều lớn hơn vật</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 flex items-center justify-between">
+                          <span>Thấu kính phân kì (<MathView math="f < 0" />):</span>
+                          <span className="font-medium px-2 py-0.5 rounded bg-slate-200 text-slate-800 text-[11px] whitespace-nowrap">Luôn cho ảnh ẢO nhỏ hơn vật</span>
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}
@@ -2174,7 +2203,7 @@ export default function VirtualLabPage() {
                           Lớp 9 — Cơ Năng
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 space-y-2 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
                         <div>
                           <MathView math="\displaystyle W_{\text{đ}} = \frac{1}{2} m v^2 \quad (\text{J, Động năng})" />
                         </div>
@@ -2191,7 +2220,7 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Định luật bảo toàn cơ năng (Bỏ qua ma sát):
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900 overflow-x-auto">
                         <MathView math="\displaystyle W = W_{\text{đ}} + W_{\text{t}} = \frac{1}{2} m v^2 + m g h = \text{const}" block />
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
@@ -2213,7 +2242,7 @@ export default function VirtualLabPage() {
                           Lớp 9 — Điện Từ Học
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900 overflow-x-auto">
                         <MathView math="\displaystyle \Phi = B \cdot S \cdot \cos(\alpha) \quad (\text{Wb, Vêbe})" block />
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
@@ -2225,7 +2254,7 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Định luật cảm ứng Faraday &amp; Máy phát điện:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900">
+                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-xl sm:text-2xl font-bold my-1 text-slate-900 overflow-x-auto">
                         <MathView math="\displaystyle e_{\text{c}} = -\frac{\Delta \Phi}{\Delta t} \implies I_{\text{c}} = \frac{e_{\text{c}}}{R}" block />
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
