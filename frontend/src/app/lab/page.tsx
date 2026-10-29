@@ -1774,12 +1774,19 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Mối liên hệ giữa tần số &amp; Độ cao / Độ to của âm:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
-                        <div>
-                          <MathView math="\displaystyle f = \frac{n}{t} \quad (\text{Hz, Tần số dao động})" />
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2">
+                        <div className="text-xl sm:text-2xl text-teal-700 whitespace-nowrap">
+                          <MathView math="\displaystyle f = \frac{n}{t} \quad (\text{Hz})" />
                         </div>
-                        <div>
-                          <MathView math="\displaystyle f \text{ càng lớn} \implies \text{Âm càng bổng (cao)}" />
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="p-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-900 font-mono whitespace-nowrap">
+                            <span className="text-[11px] text-slate-500 block">Tần số dao động:</span>
+                            <span>f ↑ ⟹ Âm bổng (cao)</span>
+                          </div>
+                          <div className="p-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-900 font-mono whitespace-nowrap">
+                            <span className="text-[11px] text-slate-500 block">Biên độ dao động:</span>
+                            <span>A ↑ ⟹ Âm to (dB)</span>
+                          </div>
                         </div>
                       </div>
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1">
@@ -1971,12 +1978,18 @@ export default function VirtualLabPage() {
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Áp suất tổng hợp &amp; Nguyên lý bình thông nhau:
                       </span>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
-                        <div>
-                          <MathView math="\displaystyle p_{\text{tổng}} = p_0 + \rho \cdot g \cdot h \quad (\text{Áp suất đáy})" />
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2">
+                        <div className="p-2 rounded-lg bg-blue-50/70 border border-blue-200 flex items-center justify-between flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="text-xs text-blue-900 font-medium">Áp suất tại đáy bình:</span>
+                          <span className="font-mono text-blue-900 font-bold whitespace-nowrap">
+                            <MathView math="\displaystyle p = p_0 + \rho \cdot g \cdot h" />
+                          </span>
                         </div>
-                        <div>
-                          <MathView math="\displaystyle \frac{F_1}{S_1} = \frac{F_2}{S_2} \quad (\text{Nguyên lý máy nén thủy lực})" />
+                        <div className="p-2 rounded-lg bg-sky-50/70 border border-sky-200 flex items-center justify-between flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="text-xs text-sky-900 font-medium">Bình thông nhau / Máy nén:</span>
+                          <span className="font-mono text-sky-900 font-bold whitespace-nowrap">
+                            <MathView math="\displaystyle \frac{F_1}{S_1} = \frac{F_2}{S_2}" />
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -2061,12 +2074,23 @@ export default function VirtualLabPage() {
                           Lớp 8 — Điện Học
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-base sm:text-lg font-bold my-1 space-y-2 text-slate-900">
-                        <div>
-                          <MathView math="\displaystyle (+) \leftrightarrow (-) \implies \text{HÚT NHAU (Trái dấu)}" />
+                      <div className="py-3 px-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2">
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-amber-50/70 border border-amber-200 flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="font-mono text-amber-900 font-bold whitespace-nowrap">
+                            <MathView math="(+) \longleftrightarrow (-)" />
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded bg-amber-200 text-amber-900 font-extrabold text-xs font-mono">
+                            HÚT NHAU (Trái dấu)
+                          </span>
                         </div>
-                        <div>
-                          <MathView math="\displaystyle (+) \leftrightarrow (+) \; ; \; (-) \leftrightarrow (-) \implies \text{ĐẨY NHAU (Cùng dấu)}" />
+
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-blue-50/70 border border-blue-200 flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="font-mono text-blue-900 font-bold whitespace-nowrap">
+                            <MathView math="(+) \longleftrightarrow (+) \quad ; \quad (-) \longleftrightarrow (-)" />
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded bg-blue-200 text-blue-900 font-extrabold text-xs font-mono">
+                            ĐẨY NHAU (Cùng dấu)
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -2213,10 +2237,10 @@ export default function VirtualLabPage() {
                   </>
                 )}
 
-                {/* 12. LỚP 9: ĐỘNG NĂNG & BẢO TOÀN CƠ NĂNG */}
+                {/* 10. LỚP 9: ĐỘNG NĂNG & BẢO TOÀN CƠ NĂNG */}
                 {activeExp === "energy_skate" && (
                   <>
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-rose-600 flex flex-col gap-2 shadow-xs">
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-rose-600 flex flex-col gap-2.5 shadow-xs">
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-sm sm:text-base text-rose-800">
                           Động năng &amp; Thế năng trọng trường (KHTN 9):
@@ -2225,28 +2249,38 @@ export default function VirtualLabPage() {
                           Lớp 9 — Cơ Năng
                         </span>
                       </div>
-                      <div className="py-4 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs text-lg sm:text-2xl font-bold my-1 space-y-2 text-slate-900 overflow-x-auto">
-                        <div>
-                          <MathView math="\displaystyle W_{\text{đ}} = \frac{1}{2} m v^2 \quad (\text{J, Động năng})" />
+                      
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2.5">
+                        <div className="p-2 rounded-lg bg-rose-50/70 border border-rose-200/80 flex items-center justify-between flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="text-xs text-rose-900 font-medium">Động năng (chuyển động):</span>
+                          <span className="font-mono text-rose-900 font-bold whitespace-nowrap">
+                            <MathView math="\displaystyle W_{\text{đ}} = \frac{1}{2} m v^2 \quad (\text{J})" />
+                          </span>
                         </div>
-                        <div>
-                          <MathView math="\displaystyle W_{\text{t}} = m \cdot g \cdot h \quad (\text{J, Thế năng trọng trường})" />
+
+                        <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-200/80 flex items-center justify-between flex-wrap gap-2 text-xs sm:text-sm">
+                          <span className="text-xs text-amber-900 font-medium">Thế năng trọng trường (độ cao):</span>
+                          <span className="font-mono text-amber-900 font-bold whitespace-nowrap">
+                            <MathView math="\displaystyle W_{\text{t}} = m \cdot g \cdot h \quad (\text{J})" />
+                          </span>
                         </div>
                       </div>
+
                       <p className="text-xs sm:text-[13px] text-slate-600 mt-1 leading-relaxed">
                         Cơ năng của vật là tổng động năng và thế năng: <MathView math="W = W_{\text{đ}} + W_{\text{t}}" />. Đơn vị cơ năng là Jun (<MathView math="\text{J}" />).
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-amber-500 flex flex-col gap-2 shadow-xs">
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 border-l-4 border-amber-500 flex flex-col gap-2.5 shadow-xs">
                       <span className="font-extrabold text-sm sm:text-base text-amber-800">
                         Định luật bảo toàn cơ năng (Bỏ qua ma sát):
                       </span>
-                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-1.5">
+                      <div className="py-3 px-3 bg-white rounded-xl text-center border border-slate-200/90 shadow-2xs font-bold my-1 text-slate-900 overflow-x-auto space-y-2">
                         <div className="text-xl sm:text-2xl text-rose-700 whitespace-nowrap">
                           <MathView math="\displaystyle W = W_{\text{đ}} + W_{\text{t}} = \text{const}" />
                         </div>
-                        <div className="text-xs sm:text-sm text-slate-600 font-mono whitespace-nowrap">
+                        <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-700 font-mono text-center whitespace-nowrap">
+                          <span className="text-slate-500 mr-2 font-normal">Khai triển:</span>
                           <MathView math="\displaystyle W = \frac{1}{2} m v^2 + m \cdot g \cdot h" />
                         </div>
                       </div>
