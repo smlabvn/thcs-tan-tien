@@ -31,7 +31,7 @@ const KHTN_DOCS: KnowledgeDoc[] = [
     grade: 6,
     topic: "Lực tương tác, Lực và Phản lực",
     title: "Tác dụng tương hỗ giữa hai vật — Lực và Phản lực (KHTN 6 & 8)",
-    content: "Khi vật A tác dụng một lực lên vật B, thì vật B cũng tác dụng trở lại vật A một lực. Hai lực này gọi là **lực và phản lực**:\n- **Đặc điểm:** Cùng phương, ngược chiều, cùng độ lớn nhưng **đặt vào hai vật khác nhau** (không triệt tiêu nhau): $\\vec{F}_{\\text{AB}} = -\\vec{F}_{\\text{BA}}$, độ lớn: $F_{\\text{tác dụng}} = F_{\\text{phản lực}}$.\n- **Ví dụ thực tiễn:**\n  1. Khi người bước đi, chân tác dụng một lực đạp về phía sau lên mặt đất, mặt đất tác dụng một **phản lực** đẩy người về phía trước.\n  2. Một cuốn sách đặt trên mặt bàn: Sách tác dụng lực nén xuống mặt bàn, mặt bàn tác dụng **phản lực đỡ** $\\vec{N}$ hướng thẳng đứng lên trên ($N = P = m \\cdot g$).\n  3. Tên lửa hoặc bóng bay xì hơi: Khí phụt ra phía sau tạo phản lực đẩy tên lửa bay về phía trước.",
+    content: "Khi vật A tác dụng một lực lên vật B, thì vật B cũng tác dụng trở lại vật A một lực. Hai lực này gọi là **lực và phản lực**:\n- **Đặc điểm:** Cùng phương, ngược chiều, cùng độ lớn nhưng **đặt vào hai vật khác nhau** (không triệt tiêu nhau):\n$$\\vec{F}_{\\text{AB}} = -\\vec{F}_{\\text{BA}} \\implies F_{\\text{AB}} = F_{\\text{BA}}$$\n- **Ví dụ thực tiễn:**\n  1. Khi người bước đi, chân tác dụng một lực đạp về phía sau lên mặt đất, mặt đất tác dụng một **phản lực** đẩy người về phía trước.\n  2. Một cuốn sách đặt trên mặt bàn: Sách tác dụng lực nén xuống mặt bàn, mặt bàn tác dụng **phản lực đỡ** $\\vec{N}$ hướng thẳng đứng lên trên ($N = P = m \\cdot g$).\n  3. Tên lửa hoặc bóng bay xì hơi: Khí phụt ra phía sau tạo phản lực đẩy tên lửa bay về phía trước.",
     source: "SGK KHTN 6 & 8 — Tương tác lực",
   },
   {
@@ -71,7 +71,7 @@ const KHTN_DOCS: KnowledgeDoc[] = [
     grade: 8,
     topic: "Lực đẩy Ác-si-mét & Điều kiện chìm nổi",
     title: "Nguyên lý Archimedes và Trọng lượng biểu kiến",
-    content: "Lực đẩy Ác-si-mét (Archimedes): $$F_{\\text{A}} = d \\cdot V = \\rho \\cdot g \\cdot V$$ (trong đó $V$ là thể tích phần chất lỏng bị vật chiếm chỗ, $\\rho$ là khối lượng riêng của chất lỏng). Điều kiện chìm nổi của vật:\n- Vật nổi: $F_{\\text{A}} > P \\iff \\rho_{\\text{chất lỏng}} > \\rho_{\\text{vật}}$.\n- Vật lơ lửng: $F_{\\text{A}} = P \\iff \\rho_{\\text{chất lỏng}} = \\rho_{\\text{vật}}$.\n- Vật chìm: $F_{\\text{A}} < P \\iff \\rho_{\\text{chất lỏng}} < \\rho_{\\text{vật}}$.",
+    content: "Lực đẩy Ác-si-mét (Archimedes):\n$$F_{\\text{A}} = d \\cdot V = \\rho \\cdot g \\cdot V$$\n(trong đó $V$ là thể tích phần chất lỏng bị vật chiếm chỗ, $\\rho$ là khối lượng riêng của chất lỏng).\n- **Điều kiện chìm nổi của vật:**\n  • Vật nổi: $F_{\\text{A}} > P$ (khối lượng riêng của chất lỏng lớn hơn vật: $\\rho_{\\text{lỏng}} > \\rho_{\\text{vật}}$)\n  • Vật lơ lửng: $F_{\\text{A}} = P$ (khối lượng riêng bằng nhau: $\\rho_{\\text{lỏng}} = \\rho_{\\text{vật}}$)\n  • Vật chìm: $F_{\\text{A}} < P$ (khối lượng riêng của chất lỏng nhỏ hơn vật: $\\rho_{\\text{lỏng}} < \\rho_{\\text{vật}}$).",
     source: "SGK KHTN 8 — Lực đẩy Ác-si-mét",
   },
   {
@@ -171,8 +171,13 @@ function findRelevantDocs(query: string, grade?: number): KnowledgeDoc[] {
   });
 
   scored.sort((a, b) => b.score - a.score);
-  const matched = scored.filter((s) => s.score > 0).slice(0, 3).map((s) => s.doc);
-  return matched.length > 0 ? matched : KHTN_DOCS.slice(0, 2);
+  const topScore = scored[0]?.score || 0;
+  // If we have a strongly matched topic (e.g. "phản lực"), only return that topic instead of mixing 3 unrelated topics
+  const matched = scored
+    .filter((s) => s.score > 0 && (topScore < 15 || s.score >= topScore * 0.7))
+    .slice(0, 2)
+    .map((s) => s.doc);
+  return matched.length > 0 ? matched : KHTN_DOCS.slice(0, 1);
 }
 
 export async function POST(req: NextRequest) {

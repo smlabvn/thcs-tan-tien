@@ -9,29 +9,13 @@ interface MarkdownMathViewProps {
 }
 
 export default function MarkdownMathView({ content, className = "" }: MarkdownMathViewProps) {
-  // Normalize latex patterns in text (e.g. \(...\) -> $...$, \[...\] -> $$...$$)
-  // and wrap any bare backslash math tokens like \Delta l = ... into $...$
+  // Normalize latex block and inline patterns without breaking existing math
   const processedContent = useMemo(() => {
     if (!content) return "";
 
-    let text = content
+    return content
       .replace(/\\\[([\s\S]*?)\\\]/g, "\n\n$$$$$1$$$$\n\n")
       .replace(/\\\(([\s\S]*?)\\\)/g, " $$$1$$ ");
-
-    // Pre-wrap common bare LaTeX formulas if not already wrapped in $
-    // e.g., \Delta l = |l - l_0| or \sum M = 0 or \rho = m / V or \vec{F}_1 = -\vec{F}_2
-    text = text.replace(
-      /(?<!\$)(?:\\(?:Delta|rho|sum|vec|frac|sigma|lambda|mu|pi|omega|tau)\b[^\$\n]+?)(?=(?:\s+[a-zà-ỹA-Z]|\.|\,|\;|\:|\n|\$|$))/g,
-      (match) => {
-        // Only wrap if it contains typical math symbols (=, +, -, /, *, \cdot, |, etc.)
-        if (/[=\+\-\/\\\|\*]/.test(match)) {
-          return `$${match.trim()}$`;
-        }
-        return match;
-      }
-    );
-
-    return text;
   }, [content]);
 
   // Parse lines into structured blocks
@@ -49,7 +33,7 @@ export default function MarkdownMathView({ content, className = "" }: MarkdownMa
         result.push(
           <div
             key={`block-math-${keyIdx++}`}
-            className="my-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-center overflow-x-auto shadow-2xs"
+            className="my-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-center overflow-x-auto shadow-2xs"
           >
             <MathView math={mathStr} block />
           </div>
@@ -59,7 +43,8 @@ export default function MarkdownMathView({ content, className = "" }: MarkdownMa
     };
 
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
+      const rawLine = lines[i];
+      const line = rawLine.trim();
 
       // Handling $$ block math opening/closing
       if (line.startsWith("$$") && line.endsWith("$$") && line.length > 2) {
@@ -68,7 +53,7 @@ export default function MarkdownMathView({ content, className = "" }: MarkdownMa
         result.push(
           <div
             key={`block-math-${keyIdx++}`}
-            className="my-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-center overflow-x-auto shadow-2xs"
+            className="my-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-center overflow-x-auto shadow-2xs"
           >
             <MathView math={inner} block />
           </div>
@@ -103,7 +88,7 @@ export default function MarkdownMathView({ content, className = "" }: MarkdownMa
         result.push(
           <hr
             key={`hr-${keyIdx++}`}
-            className="my-3 border-t border-slate-200 dark:border-slate-800"
+            className="my-3.5 border-t border-slate-200 dark:border-slate-800"
           />
         );
         continue;
@@ -114,7 +99,7 @@ export default function MarkdownMathView({ content, className = "" }: MarkdownMa
         result.push(
           <h4
             key={`h3-${keyIdx++}`}
-            className="font-bold text-slate-900 dark:text-white text-sm mt-3 mb-1.5 flex items-center gap-1.5"
+            className="font-bold text-slate-900 dark:text-white text-sm mt-3.5 mb-1.5 flex items-center gap-1.5"
           >
             {renderInline(line.slice(4))}
           </h4>
@@ -126,7 +111,7 @@ export default function MarkdownMathView({ content, className = "" }: MarkdownMa
         result.push(
           <h3
             key={`h2-${keyIdx++}`}
-            className="font-extrabold text-slate-900 dark:text-white text-base mt-3.5 mb-2 flex items-center gap-2"
+            className="font-extrabold text-slate-900 dark:text-white text-base mt-4 mb-2 flex items-center gap-2"
           >
             {renderInline(line.slice(3))}
           </h3>
@@ -138,7 +123,7 @@ export default function MarkdownMathView({ content, className = "" }: MarkdownMa
         result.push(
           <h2
             key={`h1-${keyIdx++}`}
-            className="font-extrabold text-slate-900 dark:text-white text-lg mt-4 mb-2 flex items-center gap-2"
+            className="font-extrabold text-slate-900 dark:text-white text-lg mt-4.5 mb-2.5 flex items-center gap-2"
           >
             {renderInline(line.slice(2))}
           </h2>
@@ -146,20 +131,20 @@ export default function MarkdownMathView({ content, className = "" }: MarkdownMa
         continue;
       }
 
-      // Bullet List item
+      // Bullet List item (•, -, *, or 1., 2.)
       const bulletMatch = line.match(/^([•\-\*]|\d+\.)\s+(.+)$/);
       if (bulletMatch) {
         const isNumber = /^\d+\./.test(bulletMatch[1]);
         result.push(
           <div
             key={`bullet-${keyIdx++}`}
-            className="flex items-start gap-2 my-1 text-slate-800 dark:text-slate-200 leading-relaxed pl-1"
+            className="flex items-start gap-2.5 my-1 text-slate-800 dark:text-slate-200 leading-relaxed pl-1"
           >
             <span
               className={`shrink-0 select-none ${
                 isNumber
-                  ? "font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 mt-0.5"
-                  : "text-emerald-500 font-bold mt-0.5"
+                  ? "font-mono font-bold text-xs text-emerald-700 dark:text-emerald-400 mt-0.5"
+                  : "text-emerald-600 dark:text-emerald-400 font-bold mt-0.5"
               }`}
             >
               {isNumber ? bulletMatch[1] : "•"}
@@ -193,6 +178,7 @@ export default function MarkdownMathView({ content, className = "" }: MarkdownMa
 
 /**
  * Render inline text parsing math ($...$), bold (**...**), and code (`...`)
+ * Standard ISO LaTeX math is displayed naturally without heavy green badges!
  */
 function renderInline(text: string): React.ReactNode {
   if (!text) return null;
@@ -206,7 +192,7 @@ function renderInline(text: string): React.ReactNode {
       return (
         <span
           key={`math-${index}`}
-          className="inline-block px-1 mx-0.5 rounded bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/50 align-baseline text-emerald-900 dark:text-emerald-200"
+          className="inline-block mx-0.5 align-baseline font-serif text-slate-900 dark:text-white font-medium"
         >
           <MathView math={part.trim()} />
         </span>
