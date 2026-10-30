@@ -175,18 +175,100 @@ void loop() {
     paramMin: 0,
     paramMax: 12,
     paramDefault: 6,
-    arduinoCode: `// Arduino Uno + Module Cảm biến Dòng & Áp INA219 (I2C: SDA A4, SCL A5)
+    arduinoCode: `// ==============================================================
+// ARDUINO UNO + INA219 (DONG/AP) + MAN HINH OLED 0.96" SSD1306 (I2C)
+// THCS TAY TIEN - MO HINH THI NGHIEM DINH LUAT OHM (KHTN 9)
+// ==============================================================
+// Can cai thu vien trong Arduino IDE:
+// 1. Adafruit INA219
+// 2. Adafruit SSD1306
+// 3. Adafruit GFX Library
+
 #include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include <Adafruit_INA219.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_INA219 ina219;
+
 void setup() {
   Serial.begin(115200);
-  ina219.begin();
+
+  // Khoi tao cam bien INA219
+  if (!ina219.begin()) {
+    Serial.println("Loi: Khong tim thay INA219!");
+  }
+
+  // Khoi tao man hinh OLED I2C dia chi 0x3C
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("Loi: Khong tim thay man hinh OLED!");
+  }
+
+  // Man hinh chao mung ban dau
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  display.setTextSize(1);
+  display.setCursor(10, 15);
+  display.println("THCS TAY TIEN");
+  display.setCursor(10, 32);
+  display.println("DINH LUAT OHM (KHTN 9)");
+  display.display();
+  delay(1200);
 }
+
 void loop() {
+  // Doc thong so tu cam bien INA219
+  float busVoltage_V = ina219.getBusVoltage_V();
   float current_mA = ina219.getCurrent_mA();
+  if (current_mA < 0) current_mA = 0; // chong nhieu am
+
+  // Tinh toan Dien tro R (Ohm) va Cong suat P (W)
+  float resistance_Ohm = (current_mA > 1.0) ? (busVoltage_V / (current_mA / 1000.0)) : 0.0;
+  float power_W = busVoltage_V * (current_mA / 1000.0);
+
+  // 1. Truyen du lieu thoi gian thuc len Website PhysiX (Web Serial)
   Serial.println(current_mA);
-  delay(100);
+
+  // 2. Hien thi truc quan len man hinh OLED 0.96 inch
+  display.clearDisplay();
+  
+  // Tieu de
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.println("THCS TAY TIEN - OHM");
+  display.drawLine(0, 10, 128, 10, WHITE);
+
+  // Thong so U, I, R, P
+  display.setCursor(0, 15);
+  display.print("U: ");
+  display.print(busVoltage_V, 2);
+  display.println(" V");
+
+  display.setCursor(0, 27);
+  display.print("I: ");
+  display.print(current_mA, 1);
+  display.println(" mA");
+
+  display.setCursor(0, 39);
+  display.print("R: ");
+  if (resistance_Ohm > 0 && resistance_Ohm < 9999) {
+    display.print(resistance_Ohm, 1);
+    display.println(" Ohm");
+  } else {
+    display.println("-- Ohm");
+  }
+
+  display.setCursor(0, 51);
+  display.print("P: ");
+  display.print(power_W, 3);
+  display.println(" W");
+
+  display.display();
+  delay(100); // 10 lan moi giay
 }`
   }
 };
