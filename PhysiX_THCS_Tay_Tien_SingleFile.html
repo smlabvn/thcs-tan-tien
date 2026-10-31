@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhysiX THCS Tây Tiến - Cổng Thực Nghiệm Vật Lý KHTN (6-9)</title>
+  
+  <!-- Tailwind CSS & KaTeX (CDN with inline fallbacks) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+  <style>
+    /* Custom Styling for Single File Package */
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .nav-btn.active {
+      background-color: #ecfdf5;
+      color: #047857;
+      font-weight: 700;
+      border-color: #a7f3d0;
+    }
+    /* KaTeX rendering overrides */
+    .katex { font-size: 1.05em; }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-emerald-100 selection:text-emerald-900">
+
+  <!-- ==================== HEADER / NAVBAR ==================== -->
+  <header class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-200 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <!-- Brand -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center font-black text-white text-xl shadow-xs">
+          Ψ
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-xl text-slate-900 tracking-tight">PhysiX</span>
+            <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">THCS Tây Tiến</span>
+          </div>
+          <p class="text-[11px] text-slate-500 font-medium">Cổng Học & Thực Nghiệm KHTN 6-9 (GDPT 2018)</p>
+        </div>
+      </div>
+
+      <!-- Desktop Nav Tabs -->
+      <nav class="hidden md:flex items-center gap-1.5 text-xs font-semibold">
+        <button onclick="switchTab('home')" class="nav-btn active px-3 py-2 rounded-xl border border-transparent hover:bg-slate-100 transition-all" data-tab="home">🏠 Trang chủ</button>
+        <button onclick="switchTab('formulas')" class="nav-btn px-3 py-2 rounded-xl border border-transparent hover:bg-slate-100 transition-all" data-tab="formulas">📐 Công thức KHTN</button>
+        <button onclick="switchTab('lab')" class="nav-btn px-3 py-2 rounded-xl border border-transparent hover:bg-slate-100 transition-all" data-tab="lab">🧪 Thí nghiệm ảo</button>
+        <button onclick="switchTab('iot')" class="nav-btn px-3 py-2 rounded-xl border border-transparent hover:bg-slate-100 transition-all" data-tab="iot">🔌 Cảm biến IoT</button>
+        <button onclick="switchTab('quiz')" class="nav-btn px-3 py-2 rounded-xl border border-transparent hover:bg-slate-100 transition-all" data-tab="quiz">📝 Ôn thi vào 10</button>
+        <button onclick="switchTab('tutor')" class="nav-btn px-3 py-2 rounded-xl border border-transparent hover:bg-slate-100 transition-all" data-tab="tutor">🤖 Gia sư AI</button>
+      </nav>
+
+      <!-- Key Settings & Mobile Menu -->
+      <div class="flex items-center gap-2">
+        <button onclick="toggleKeyModal(true)" id="apiKeyNavBtn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all shadow-2xs bg-amber-500 hover:bg-amber-600 text-white border-amber-600 cursor-pointer">
+          <span>🔑</span>
+          <span id="apiKeyNavText">Nhập API Key</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Nav Bar (Bottom or Underneath) -->
+    <div class="md:hidden flex items-center gap-1 px-4 py-2 border-t border-slate-100 overflow-x-auto text-xs font-semibold no-scrollbar">
+      <button onclick="switchTab('home')" class="nav-btn active px-2.5 py-1.5 rounded-lg shrink-0" data-tab="home">Trang chủ</button>
+      <button onclick="switchTab('formulas')" class="nav-btn px-2.5 py-1.5 rounded-lg shrink-0" data-tab="formulas">Công thức</button>
+      <button onclick="switchTab('lab')" class="nav-btn px-2.5 py-1.5 rounded-lg shrink-0" data-tab="lab">Thí nghiệm ảo</button>
+      <button onclick="switchTab('iot')" class="nav-btn px-2.5 py-1.5 rounded-lg shrink-0" data-tab="iot">Cảm biến IoT</button>
+      <button onclick="switchTab('quiz')" class="nav-btn px-2.5 py-1.5 rounded-lg shrink-0" data-tab="quiz">Ôn thi</button>
+      <button onclick="switchTab('tutor')" class="nav-btn px-2.5 py-1.5 rounded-lg shrink-0" data-tab="tutor">Gia sư AI</button>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN CONTENT CONTAINERS ==================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+    <!-- TAB 1: HOME -->
+    <section id="tab-home" class="tab-content active space-y-8">
+      <!-- Hero Banner -->
+      <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-800 via-teal-800 to-slate-900 text-white p-8 sm:p-12 shadow-xl">
+        <div class="relative z-10 max-w-3xl space-y-4">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 text-xs font-bold tracking-wide">
+            🏆 SẢN PHẨM SÁNG TẠO KHKT DÀNH CHO HỌC SINH THCS
+          </div>
+          <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
+            Cổng Thực Nghiệm &amp; Gia Sư AI Vật Lý THCS Tây Tiến
+          </h1>
+          <p class="text-emerald-100/90 text-sm sm:text-base leading-relaxed">
+            Hệ thống chuyển đổi số toàn diện môn Khoa Học Tự Nhiên (Lớp 6, 7, 8, 9) theo Chương Trình GDPT 2018: Tích hợp Thí nghiệm ảo GeoGebra/Canvas, Cảm biến vi mạch IoT kết nối máy tính thời gian thực và Trợ lý RAG AI Google Gemini.
+          </p>
+          <div class="pt-4 flex flex-wrap gap-3">
+            <button onclick="switchTab('lab')" class="px-5 py-3 rounded-xl bg-white text-emerald-900 font-bold text-sm shadow-md hover:bg-emerald-50 transition-all flex items-center gap-2">
+              <span>🧪 Trải nghiệm Thí Nghiệm Ảo</span>
+            </button>
+            <button onclick="switchTab('iot')" class="px-5 py-3 rounded-xl bg-emerald-600/60 hover:bg-emerald-600 text-white font-bold text-sm border border-emerald-400/40 shadow-sm transition-all flex items-center gap-2">
+              <span>🔌 Kết nối Cảm Biến IoT</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Features Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+          <div class="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl">📐</div>
+          <h3 class="font-bold text-base text-slate-900">Chuẩn Quốc Tế ISO 80000 &amp; SGK 2018</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            100% công thức được biên soạn theo thuật ngữ chuẩn GDPT 2018 (moment lực, lực đẩy Archimedes, định luật Ôm, đơn vị đo chuẩn SI).
+          </p>
+        </div>
+
+        <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+          <div class="w-12 h-12 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center text-2xl">⚡</div>
+          <h3 class="font-bold text-base text-slate-900">Cảm Biến IoT Web Serial Trực Tiếp</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Cắm trực tiếp Arduino Uno + INA219 + màn hình OLED qua cổng USB máy tính để đo đạc và vẽ đồ thị đặc tuyến Vôn - Ampe thời gian thực.
+          </p>
+        </div>
+
+        <div class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+          <div class="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-2xl">🤖</div>
+          <h3 class="font-bold text-base text-slate-900">Gia Sư Trí Tuệ Nhân Tạo RAG AI</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Hỏi đáp trực tiếp mọi bài toán, hiện tượng vật lý với mô hình Google Gemini kết hợp kho dữ liệu trích xuất SGK KHTN 6-9 trường THCS Tây Tiến.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: FORMULAS -->
+    <section id="tab-formulas" class="tab-content space-y-6">
+      <div class="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-slate-200">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">Tra Cứu &amp; Tính Toán Công Thức KHTN (6-9)</h2>
+          <p class="text-xs text-slate-500">Chuẩn hóa ký hiệu đại lượng quốc tế ISO 80000 và Chương trình GDPT 2018</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Card 1: Archimedes -->
+        <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 text-xs font-bold">KHTN 8 • Lực & Áp suất</span>
+            <span class="text-xs text-slate-400 font-mono">ISO: F_A = ρ·g·V</span>
+          </div>
+          <h3 class="font-bold text-base text-slate-900">Lực Đẩy Ác-si-mét (Archimedes)</h3>
+          <div class="p-3.5 rounded-xl bg-slate-50 text-center font-serif text-lg text-emerald-900 border border-slate-200 overflow-x-auto">
+            $$F_{\text{A}} = d \cdot V = \rho \cdot g \cdot V$$
+          </div>
+          <div class="text-xs text-slate-600 space-y-1">
+            <p>• $F_{\text{A}}$: Lực đẩy Ác-si-mét ($\text{N}$)</p>
+            <p>• $\rho$: Khối lượng riêng chất lỏng ($\text{kg/m}^3$), $g \approx 9{,}8\text{ m/s}^2$</p>
+            <p>• $V$: Thể tích phần chất lỏng bị vật chiếm chỗ ($\text{m}^3$)</p>
+          </div>
+        </div>
+
+        <!-- Card 2: Ohm's Law -->
+        <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 text-xs font-bold">KHTN 9 • Điện học</span>
+            <span class="text-xs text-slate-400 font-mono">ISO: I = U / R</span>
+          </div>
+          <h3 class="font-bold text-base text-slate-900">Định Luật Ôm &amp; Công Suất Điện</h3>
+          <div class="p-3.5 rounded-xl bg-slate-50 text-center font-serif text-lg text-emerald-900 border border-slate-200 overflow-x-auto">
+            $$I = \frac{U}{R}, \quad P = U \cdot I = I^2 \cdot R = \frac{U^2}{R}$$
+          </div>
+          <div class="text-xs text-slate-600 space-y-1">
+            <p>• $I$: Cường độ dòng điện ($\text{A}$), $U$: Hiệu điện thế ($\text{V}$)</p>
+            <p>• $R$: Điện trở vật dẫn ($\Omega$), $P$: Công suất tiêu thụ điện ($\text{W}$)</p>
+            <p>• Đoạn mạch nối tiếp: $R_{\text{tđ}} = R_1 + R_2$; Song song: $\frac{1}{R_{\text{tđ}}} = \frac{1}{R_1} + \frac{1}{R_2}$</p>
+          </div>
+        </div>
+
+        <!-- Card 3: Lever and Moment -->
+        <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 text-xs font-bold">KHTN 8 • Tác dụng làm quay</span>
+            <span class="text-xs text-slate-400 font-mono">ISO: F1·d1 = F2·d2</span>
+          </div>
+          <h3 class="font-bold text-base text-slate-900">Quy Tắc Đòn Bẩy &amp; Moment Lực</h3>
+          <div class="p-3.5 rounded-xl bg-slate-50 text-center font-serif text-lg text-emerald-900 border border-slate-200 overflow-x-auto">
+            $$F_1 \cdot d_1 = F_2 \cdot d_2$$
+          </div>
+          <div class="text-xs text-slate-600 space-y-1">
+            <p>• Thuật ngữ chuẩn KHTN 8 là <strong>moment lực</strong> (không dùng 'mômen').</p>
+            <p>• $F_1, F_2$: Các lực tác dụng lên đòn bẩy ($\text{N}$)</p>
+            <p>• $d_1, d_2$: Khoảng cách từ trục quay đến giá của lực (cánh tay đòn, $\text{m}$ hoặc $\text{cm}$)</p>
+          </div>
+        </div>
+
+        <!-- Card 4: Thin Lens -->
+        <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 text-xs font-bold">KHTN 9 • Quang học</span>
+            <span class="text-xs text-slate-400 font-mono">ISO: 1/f = 1/d_o + 1/d_i</span>
+          </div>
+          <h3 class="font-bold text-base text-slate-900">Phương Trình Thấu Kính Mỏng</h3>
+          <div class="p-3.5 rounded-xl bg-slate-50 text-center font-serif text-lg text-emerald-900 border border-slate-200 overflow-x-auto">
+            $$\frac{1}{f} = \frac{1}{d_{\text{o}}} + \frac{1}{d_{\text{i}}} \iff d_{\text{i}} = \frac{d_{\text{o}} \cdot f}{d_{\text{o}} - f}$$
+          </div>
+          <div class="text-xs text-slate-600 space-y-1">
+            <p>• $f$: Tiêu cự thấu kính ($f > 0$: Hội tụ; $f < 0$: Phân kì)</p>
+            <p>• $d_{\text{o}}$: Khoảng cách từ vật đến thấu kính</p>
+            <p>• $d_{\text{i}}$: Khoảng cách từ ảnh đến thấu kính ($d_{\text{i}} > 0$: ảnh thật, $d_{\text{i}} < 0$: ảnh ảo)</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: VIRTUAL LAB -->
+    <section id="tab-lab" class="tab-content space-y-6">
+      <div class="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-slate-200">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">Phòng Thí Nghiệm Ảo Trực Quan</h2>
+          <p class="text-xs text-slate-500">Mô phỏng vật lý tương tác kéo thả theo thời gian thực</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="switchLabExp('archimedes')" class="lab-sub-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white" id="subBtn-archimedes">Lực đẩy Archimedes</button>
+          <button onclick="switchLabExp('lever')" class="lab-sub-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-700 border border-slate-200" id="subBtn-lever">Đòn bẩy & Moment</button>
+        </div>
+      </div>
+
+      <!-- Lab 1: Archimedes Simulation -->
+      <div id="lab-archimedes" class="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="space-y-4">
+          <h3 class="font-bold text-sm text-slate-90 thông">Điều khiển thông số thực nghiệm:</h3>
+          
+          <div>
+            <label class="text-xs font-bold text-slate-700 flex justify-between">
+              <span>Chất lỏng (Khối lượng riêng ρ):</span>
+              <span id="label-fluid-rho" class="font-mono text-emerald-700">1000 kg/m³ (Nước)</span>
+            </label>
+            <select id="select-fluid" onchange="updateArchimedesSim()" class="mt-1 w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs">
+              <option value="1000">Nước nguyên chất (1000 kg/m³)</option>
+              <option value="800">Dầu ăn (800 kg/m³)</option>
+              <option value="1030">Nước biển (1030 kg/m³)</option>
+              <option value="13600">Thủy ngân (13600 kg/m³)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-xs font-bold text-slate-700 flex justify-between">
+              <span>Khối lượng vật mẫu m:</span>
+              <span id="label-object-m" class="font-mono text-emerald-700">0.50 kg</span>
+            </label>
+            <input type="range" id="range-object-m" min="0.1" max="2.0" step="0.05" value="0.5" oninput="updateArchimedesSim()" class="w-full accent-emerald-600">
+          </div>
+
+          <div>
+            <label class="text-xs font-bold text-slate-700 flex justify-between">
+              <span>Thể tích vật mẫu V:</span>
+              <span id="label-object-v" class="font-mono text-emerald-700">600 cm³</span>
+            </label>
+            <input type="range" id="range-object-v" min="100" max="1500" step="50" value="600" oninput="updateArchimedesSim()" class="w-full accent-emerald-600">
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5 font-mono">
+            <div class="flex justify-between"><span>Trọng lượng vật (P = m·g):</span> <strong id="res-P">4.90 N</strong></div>
+            <div class="flex justify-between"><span>Lực đẩy cực đại (F_A max):</span> <strong id="res-FA-max" class="text-emerald-700">5.88 N</strong></div>
+            <div class="flex justify-between"><span>Trạng thái:</span> <strong id="res-status" class="text-emerald-700">VẬT NỔI</strong></div>
+            <div class="flex justify-between"><span>Thể tích chìm (V_chìm):</span> <strong id="res-V-sub">500 cm³ (83.3%)</strong></div>
+          </div>
+        </div>
+
+        <!-- Canvas Visualizer -->
+        <div class="lg:col-span-2 flex flex-col items-center justify-center p-4 bg-slate-900 rounded-2xl relative min-h-[340px]">
+          <canvas id="archimedesCanvas" width="500" height="320" class="max-w-full"></canvas>
+          <div class="absolute top-3 left-4 text-[11px] font-mono text-emerald-400">
+            Mô phỏng lực đẩy Ác-si-mét (GDPT 2018)
+          </div>
+        </div>
+      </div>
+
+      <!-- Lab 2: Lever Simulation -->
+      <div id="lab-lever" class="hidden p-6 rounded-2xl bg-white border border-slate-200 shadow-xs grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="space-y-4">
+          <h3 class="font-bold text-sm text-slate-900">Thông số đòn bẩy KHTN 8:</h3>
+          
+          <div>
+            <label class="text-xs font-bold text-slate-700 flex justify-between">
+              <span>Lực bên trái (F1):</span>
+              <span id="label-lever-f1" class="font-mono text-emerald-700">20 N</span>
+            </label>
+            <input type="range" id="range-lever-f1" min="5" max="100" step="5" value="20" oninput="updateLeverSim()" class="w-full accent-emerald-600">
+          </div>
+
+          <div>
+            <label class="text-xs font-bold text-slate-700 flex justify-between">
+              <span>Cánh tay đòn d1:</span>
+              <span id="label-lever-d1" class="font-mono text-emerald-700">40 cm</span>
+            </label>
+            <input type="range" id="range-lever-d1" min="10" max="80" step="5" value="40" oninput="updateLeverSim()" class="w-full accent-emerald-600">
+          </div>
+
+          <div>
+            <label class="text-xs font-bold text-slate-700 flex justify-between">
+              <span>Cánh tay đòn d2:</span>
+              <span id="label-lever-d2" class="font-mono text-emerald-700">20 cm</span>
+            </label>
+            <input type="range" id="range-lever-d2" min="10" max="80" step="5" value="20" oninput="updateLeverSim()" class="w-full accent-emerald-600">
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5 font-mono">
+            <div class="flex justify-between"><span>Tác dụng làm quay trái:</span> <strong>F1·d1 = <span id="res-m1">800</span> N·cm</strong></div>
+            <div class="flex justify-between"><span>Lực nâng cân bằng F2:</span> <strong id="res-f2" class="text-emerald-700">40 N</strong></div>
+            <div class="flex justify-between"><span>Lợi về lực:</span> <strong id="res-lever-gain" class="text-emerald-700">Lợi 2 lần về lực</strong></div>
+          </div>
+        </div>
+
+        <!-- Canvas Lever Visualizer -->
+        <div class="lg:col-span-2 flex flex-col items-center justify-center p-4 bg-slate-900 rounded-2xl relative min-h-[340px]">
+          <canvas id="leverCanvas" width="500" height="320" class="max-w-full"></canvas>
+          <div class="absolute top-3 left-4 text-[11px] font-mono text-emerald-400">
+            Quy tắc cân bằng đòn bẩy: F1·d1 = F2·d2 (KHTN 8)
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: IOT SENSORS -->
+    <section id="tab-iot" class="tab-content space-y-6">
+      <div class="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-slate-200">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">Kết Nối Cảm Biến Vi Mạch IoT (Web Serial)</h2>
+          <p class="text-xs text-slate-500">Khảo sát Định luật Ôm & Đặc tuyến Vôn - Ampe với Arduino Uno + INA219 + OLED SSD1306</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btnSerialConnect" onclick="handleSerialToggle()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center gap-1.5">
+            <span>🔌 Cắm cáp USB (Web Serial)</span>
+          </button>
+          <button id="btnSimulateIoT" onclick="toggleIoTSimulation()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300">
+            <span>⚡ Chạy giả lập ảo</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-time Dashboard -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
+          <span class="text-[11px] font-bold text-slate-500 uppercase">Điện áp U</span>
+          <div class="text-2xl font-extrabold text-slate-900 mt-1"><span id="live-u">5.00</span> <span class="text-sm font-semibold text-slate-400">V</span></div>
+        </div>
+        <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
+          <span class="text-[11px] font-bold text-slate-500 uppercase">Dòng điện I (Thực)</span>
+          <div class="text-2xl font-extrabold text-emerald-700 mt-1"><span id="live-i">50.2</span> <span class="text-sm font-semibold text-slate-400">mA</span></div>
+        </div>
+        <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
+          <span class="text-[11px] font-bold text-slate-500 uppercase">Điện trở R (U/I)</span>
+          <div class="text-2xl font-extrabold text-slate-900 mt-1"><span id="live-r">99.6</span> <span class="text-sm font-semibold text-slate-400">Ω</span></div>
+        </div>
+        <div class="p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
+          <span class="text-[11px] font-bold text-slate-500 uppercase">Công suất P (U·I)</span>
+          <div class="text-2xl font-extrabold text-amber-600 mt-1"><span id="live-p">0.25</span> <span class="text-sm font-semibold text-slate-400">W</span></div>
+        </div>
+      </div>
+
+      <!-- Real-time Canvas Graph -->
+      <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="font-bold text-sm text-slate-900">Đồ Thị Đặc Tuyến Thời Gian Thực (I theo thời gian)</h3>
+          <span id="iotStatusBadge" class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-mono font-bold">Giả lập chuẩn thực nghiệm</span>
+        </div>
+        <div class="bg-slate-950 p-3 rounded-xl overflow-hidden flex items-center justify-center">
+          <canvas id="iotWaveCanvas" width="800" height="240" class="w-full max-h-[260px]"></canvas>
+        </div>
+      </div>
+
+      <!-- Pinout & Wiring Info -->
+      <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+        <h3 class="font-bold text-sm text-slate-900">Sơ đồ chân kết nối vi mạch (Pinout Arduino Uno + INA219 + OLED 0.96")</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div>
+            <p class="font-bold text-emerald-800 mb-1">1. Giao tiếp I2C (Cắm chung chân):</p>
+            <p>• 5V Arduino ──► VCC (INA219) &amp; VCC (OLED)</p>
+            <p>• GND Arduino ──► GND (INA219) &amp; GND (OLED)</p>
+            <p>• A4 Arduino ──► SDA (INA219) &amp; SDA (OLED)</p>
+            <p>• A5 Arduino ──► SCL (INA219) &amp; SCL (OLED)</p>
+          </div>
+          <div>
+            <p class="font-bold text-emerald-800 mb-1">2. Mạch đo dòng & tải R:</p>
+            <p>• Pin (+) ──► Biến trở 10k (chân 1)</p>
+            <p>• Biến trở (chân giữa 2) ──► Vin+ (INA219)</p>
+            <p>• Vin- (INA219) ──► Điện trở R (100Ω)</p>
+            <p>• Điện trở R đầu kia ──► Pin (-) và chung GND</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: QUIZ -->
+    <section id="tab-quiz" class="tab-content space-y-6">
+      <div class="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-slate-200">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">Ngân Hàng Câu Hỏi Ôn Thi KHTN Vào 10</h2>
+          <p class="text-xs text-slate-500">Chấm điểm tự động và giải thích chi tiết theo SGK GDPT 2018</p>
+        </div>
+        <div class="text-sm font-bold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+          Điểm số: <span id="quizScoreText">0 / 4</span>
+        </div>
+      </div>
+
+      <div class="space-y-4" id="quizContainer">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- TAB 6: AI TUTOR -->
+    <section id="tab-tutor" class="tab-content space-y-4">
+      <div class="pb-3 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <span>Gia Sư Trí Tuệ Nhân Tạo RAG AI</span>
+            <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold">THCS Tây Tiến</span>
+          </h2>
+          <p class="text-xs text-slate-500">Hỏi đáp vật lý theo chuẩn SGK KHTN 6-9 & công thức quốc tế</p>
+        </div>
+        <button onclick="toggleKeyModal(true)" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-300">
+          Cài đặt Gemini Key
+        </button>
+      </div>
+
+      <!-- Chat Box -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col h-[520px] overflow-hidden">
+        <div id="chatMessages" class="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs sm:text-sm">
+          <!-- Intro message -->
+          <div class="flex gap-2.5">
+            <div class="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">Ψ</div>
+            <div class="max-w-[85%] p-3.5 rounded-2xl rounded-tl-none bg-slate-50 border border-slate-200 text-slate-800 leading-relaxed space-y-2">
+              <p>Xin chào! Mình là <strong>Gia sư AI THCS Tây Tiến</strong>. Mình có thể giải đáp mọi bài tập hay hiện tượng Vật lý KHTN lớp 6, 7, 8, 9 (Lực đẩy Archimedes, Quy tắc đòn bẩy & moment lực, Định luật Ôm, Thấu kính...). Bạn đang cần giúp gì hôm nay?</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sample prompts chips -->
+        <div class="px-3 py-2 bg-slate-50/70 border-t border-slate-100 flex items-center gap-2 overflow-x-auto text-[11px] font-medium no-scrollbar">
+          <span class="text-slate-400 shrink-0 font-bold">Gợi ý:</span>
+          <button onclick="sendQuickPrompt('phản lực là gì')" class="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700 hover:text-emerald-700 shrink-0">phản lực là gì?</button>
+          <button onclick="sendQuickPrompt('Định luật Ôm I = U/R và công suất P')" class="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700 hover:text-emerald-700 shrink-0">Định luật Ôm (I = U/R)</button>
+          <button onclick="sendQuickPrompt('Quy tắc đòn bẩy F1·d1 = F2·d2 lớp 8')" class="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700 hover:text-emerald-700 shrink-0">Đòn bẩy (F1·d1 = F2·d2)</button>
+          <button onclick="sendQuickPrompt('Lực đẩy Archimedes Fb = rho * g * V')" class="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700 hover:text-emerald-700 shrink-0">Lực đẩy Archimedes</button>
+        </div>
+
+        <!-- Input Bar -->
+        <form onsubmit="handleChatSubmit(event)" class="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
+          <input type="text" id="chatInput" placeholder="Nhập câu hỏi Vật lý KHTN hoặc dán mã AIzaSy... vào đây..." class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-emerald-600">
+          <button type="submit" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer">
+            <span>Gửi</span>
+          </button>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="mt-auto bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div>© 2026 <strong>THCS Tây Tiến</strong> • Cổng Học &amp; Thực Nghiệm KHTN GDPT 2018</div>
+      <div class="font-mono text-[11px] text-slate-400">Phiên bản đóng gói độc lập Single-File (HTML5 + Web Serial + KaTeX)</div>
+    </div>
+  </footer>
+
+  <!-- ==================== MODAL GEMINI API KEY ==================== -->
+  <div id="keyModal" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+          <span>🔑</span>
+          <span>Cài Đặt Gemini API Key</span>
+        </h3>
+        <button onclick="toggleKeyModal(false)" class="text-slate-400 hover:text-slate-700 text-lg font-bold">&times;</button>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Nhập khóa API miễn phí từ <strong>Google AI Studio</strong> để AI giải đáp không giới hạn mọi bài tập chuyên sâu:
+      </p>
+      <input type="password" id="modalKeyInput" placeholder="Dán mã AIzaSy... vào đây" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono">
+      <div class="flex items-center justify-between pt-2">
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-xs text-emerald-700 hover:underline">Lấy key miễn phí &nearr;</a>
+        <div class="flex gap-2">
+          <button onclick="saveApiKey()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs">Lưu Key</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT LOGIC ==================== -->
+  <script>
+    // 1. TAB SWITCHING
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+
+      const target = document.getElementById('tab-' + tabId);
+      if (target) target.classList.add('active');
+
+      document.querySelectorAll(`[data-tab="${tabId}"]`).forEach(btn => btn.classList.add('active'));
+
+      if (tabId === 'lab') {
+        setTimeout(() => { updateArchimedesSim(); updateLeverSim(); }, 50);
+      }
+      if (tabId === 'iot') {
+        setTimeout(() => { initIoTCanvas(); }, 50);
+      }
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, { delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}] });
+      }
+    }
+
+    // 2. API KEY STORAGE
+    function initApiKey() {
+      const saved = localStorage.getItem('physix_gemini_api_key') || '';
+      const navBtn = document.getElementById('apiKeyNavBtn');
+      const navText = document.getElementById('apiKeyNavText');
+      const modalInput = document.getElementById('modalKeyInput');
+      if (modalInput) modalInput.value = saved;
+
+      if (saved) {
+        navBtn.classList.remove('bg-amber-500', 'border-amber-600');
+        navBtn.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-300');
+        navText.textContent = 'Gemini: Đã bật';
+      } else {
+        navBtn.classList.remove('bg-emerald-50', 'text-emerald-800', 'border-emerald-300');
+        navBtn.classList.add('bg-amber-500', 'border-amber-600', 'text-white');
+        navText.textContent = 'Nhập API Key';
+      }
+    }
+
+    function toggleKeyModal(show) {
+      const modal = document.getElementById('keyModal');
+      if (show) modal.classList.remove('hidden');
+      else modal.classList.add('hidden');
+    }
+
+    function saveApiKey() {
+      const val = document.getElementById('modalKeyInput').value.trim();
+      if (val) localStorage.setItem('physix_gemini_api_key', val);
+      else localStorage.removeItem('physix_gemini_api_key');
+      initApiKey();
+      toggleKeyModal(false);
+      alert('Đã cập nhật Gemini API Key!');
+    }
+
+    // 3. ARCHIMEDES SIMULATION
+    function updateArchimedesSim() {
+      const rho = parseFloat(document.getElementById('select-fluid').value);
+      const m = parseFloat(document.getElementById('range-object-m').value);
+      const vCm3 = parseFloat(document.getElementById('range-object-v').value);
+      
+      document.getElementById('label-object-m').textContent = m.toFixed(2) + ' kg';
+      document.getElementById('label-object-v').textContent = vCm3 + ' cm³';
+      
+      const g = 9.807;
+      const P = m * g;
+      const vM3 = vCm3 * 1e-6;
+      const FaMax = rho * g * vM3;
+
+      let status = '';
+      let vSubCm3 = 0;
+
+      if (FaMax < P) {
+        status = 'VẬT CHÌM HOÀN TOÀN (F_A < P)';
+        vSubCm3 = vCm3;
+      } else if (Math.abs(FaMax - P) < 0.05) {
+        status = 'VẬT LƠ LỬNG (F_A = P)';
+        vSubCm3 = vCm3;
+      } else {
+        status = 'VẬT NỔI TRÊN MẶT (F_A = P)';
+        vSubCm3 = (P / (rho * g)) * 1e6;
+      }
+
+      document.getElementById('res-P').textContent = P.toFixed(2) + ' N';
+      document.getElementById('res-FA-max').textContent = FaMax.toFixed(2) + ' N';
+      document.getElementById('res-status').textContent = status;
+      document.getElementById('res-V-sub').textContent = Math.round(vSubCm3) + ' cm³ (' + ((vSubCm3 / vCm3)*100).toFixed(1) + '%)';
+
+      // Draw canvas
+      const canvas = document.getElementById('archimedesCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Beaker
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(150, 60, 200, 220);
+
+      // Liquid
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+      ctx.fillRect(152, 100, 196, 178);
+
+      // Block
+      const subRatio = Math.min(1, vSubCm3 / vCm3);
+      const blockH = 70;
+      const blockW = 70;
+      const surfaceY = 100;
+      const blockY = surfaceY - (1 - subRatio) * blockH;
+
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(215, blockY, blockW, blockH);
+      ctx.strokeStyle = '#d97706';
+      ctx.strokeRect(215, blockY, blockW, blockH);
+
+      // Vector P (Gravity)
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(250, blockY + 35);
+      ctx.lineTo(250, blockY + 35 + 45);
+      ctx.stroke();
+      ctx.fillStyle = '#ef4444';
+      ctx.fillText('P (' + P.toFixed(2) + 'N)', 258, blockY + 70);
+
+      // Vector Fa (Buoyancy)
+      const faActual = Math.min(P, FaMax);
+      ctx.strokeStyle = '#10b981';
+      ctx.beginPath();
+      ctx.moveTo(250, blockY + 35);
+      ctx.lineTo(250, blockY + 35 - 45);
+      ctx.stroke();
+      ctx.fillStyle = '#10b981';
+      ctx.fillText('F_A (' + faActual.toFixed(2) + 'N)', 258, blockY + 10);
+    }
+
+    // 4. LEVER SIMULATION
+    function switchLabExp(type) {
+      document.getElementById('lab-archimedes').classList.toggle('hidden', type !== 'archimedes');
+      document.getElementById('lab-lever').classList.toggle('hidden', type !== 'lever');
+      
+      document.getElementById('subBtn-archimedes').className = type === 'archimedes' ? 'lab-sub-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white' : 'lab-sub-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-700 border border-slate-200';
+      document.getElementById('subBtn-lever').className = type === 'lever' ? 'lab-sub-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white' : 'lab-sub-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-700 border border-slate-200';
+      
+      if (type === 'lever') updateLeverSim();
+      else updateArchimedesSim();
+    }
+
+    function updateLeverSim() {
+      const f1 = parseFloat(document.getElementById('range-lever-f1').value);
+      const d1 = parseFloat(document.getElementById('range-lever-d1').value);
+      const d2 = parseFloat(document.getElementById('range-lever-d2').value);
+
+      document.getElementById('label-lever-f1').textContent = f1 + ' N';
+      document.getElementById('label-lever-d1').textContent = d1 + ' cm';
+      document.getElementById('label-lever-d2').textContent = d2 + ' cm';
+
+      const m1 = f1 * d1;
+      const f2 = m1 / d2;
+      const gain = (f2 / f1).toFixed(2);
+
+      document.getElementById('res-m1').textContent = m1.toFixed(0);
+      document.getElementById('res-f2').textContent = f2.toFixed(1) + ' N';
+      document.getElementById('res-lever-gain').textContent = gain >= 1 ? `Được lợi ${gain} lần về lực` : `Thiệt ${(1/gain).toFixed(2)} lần về lực`;
+
+      const canvas = document.getElementById('leverCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const pivotX = 250;
+      const pivotY = 170;
+
+      // Fulcrum triangle
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath();
+      ctx.moveTo(pivotX, pivotY);
+      ctx.lineTo(pivotX - 25, pivotY + 45);
+      ctx.lineTo(pivotX + 25, pivotY + 45);
+      ctx.closePath();
+      ctx.fill();
+
+      // Lever bar
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 10;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(pivotX - d1 * 2.2, pivotY);
+      ctx.lineTo(pivotX + d2 * 2.2, pivotY);
+      ctx.stroke();
+
+      // Weight 1
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(pivotX - d1 * 2.2 - 15, pivotY, 30, Math.min(60, f1 * 0.8));
+      ctx.fillText(`F1=${f1}N`, pivotX - d1 * 2.2 - 20, pivotY - 12);
+
+      // Weight 2
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(pivotX + d2 * 2.2 - 15, pivotY, 30, Math.min(60, f2 * 0.8));
+      ctx.fillText(`F2=${f2.toFixed(1)}N`, pivotX + d2 * 2.2 - 20, pivotY - 12);
+    }
+
+    // 5. IOT GRAPH & SIMULATION
+    let iotSimInterval = null;
+    let waveData = [];
+
+    function initIoTCanvas() {
+      const canvas = document.getElementById('iotWaveCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!iotSimInterval) toggleIoTSimulation();
+    }
+
+    function toggleIoTSimulation() {
+      if (iotSimInterval) {
+        clearInterval(iotSimInterval);
+        iotSimInterval = null;
+        document.getElementById('iotStatusBadge').textContent = 'Tạm dừng đo';
+        return;
+      }
+
+      document.getElementById('iotStatusBadge').textContent = 'Đang nhận dữ liệu trực tiếp (10 Hz)';
+      let t = 0;
+      iotSimInterval = setInterval(() => {
+        t += 0.1;
+        const baseU = 5.0 + Math.sin(t * 0.5) * 1.5;
+        const noise = (Math.random() - 0.5) * 0.8;
+        const currentMA = (baseU / 100.0) * 1000.0 + noise;
+        const currentA = currentMA / 1000.0;
+        const rCalc = currentA > 0 ? (baseU / currentA) : 100;
+        const pCalc = baseU * currentA;
+
+        document.getElementById('live-u').textContent = baseU.toFixed(2);
+        document.getElementById('live-i').textContent = currentMA.toFixed(1);
+        document.getElementById('live-r').textContent = rCalc.toFixed(1);
+        document.getElementById('live-p').textContent = pCalc.toFixed(3);
+
+        waveData.push(currentMA);
+        if (waveData.length > 80) waveData.shift();
+
+        drawIoTWave();
+      }, 100);
+    }
+
+    function drawIoTWave() {
+      const canvas = document.getElementById('iotWaveCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Grid
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      for (let y = 30; y < canvas.height; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      // Wave
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      const step = canvas.width / 80;
+      for (let i = 0; i < waveData.length; i++) {
+        const val = waveData[i];
+        const y = canvas.height - (val / 80.0) * (canvas.height - 40) - 20;
+        if (i === 0) ctx.moveTo(i * step, y);
+        else ctx.lineTo(i * step, y);
+      }
+      ctx.stroke();
+    }
+
+    async function handleSerialToggle() {
+      if (!("serial" in navigator)) {
+        alert("Trình duyệt chưa hỗ trợ Web Serial. Vui lòng mở bằng Google Chrome hoặc Microsoft Edge trên máy tính!");
+        return;
+      }
+      try {
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        if (iotSimInterval) clearInterval(iotSimInterval);
+        document.getElementById('iotStatusBadge').textContent = 'Đã kết nối USB Serial (115200 bps)';
+        document.getElementById('btnSerialConnect').textContent = '✓ Đang nhận từ bo mạch';
+
+        const textDecoder = new TextDecoderStream();
+        port.readable.pipeTo(textDecoder.writable);
+        const reader = textDecoder.readable.getReader();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const num = parseFloat(line.trim());
+            if (!isNaN(num)) {
+              document.getElementById('live-i').textContent = num.toFixed(1);
+              waveData.push(num);
+              if (waveData.length > 80) waveData.shift();
+              drawIoTWave();
+            }
+          }
+        }
+      } catch (e) {
+        alert("Lỗi kết nối Serial: " + (e.message || e));
+      }
+    }
+
+    // 6. QUIZ QUESTIONS & GRADING
+    const QUIZ_DATA = [
+      {
+        q: "Theo SGK KHTN 8, tác dụng làm quay của lực (moment lực) càng lớn khi:",
+        opts: ["Lực càng lớn hoặc cánh tay đòn càng lớn", "Lực càng nhỏ hoặc cánh tay đòn càng nhỏ", "Chỉ phụ thuộc vào khối lượng vật", "Không phụ thuộc vào khoảng cách trục quay"],
+        ans: 0,
+        exp: "Moment lực đặc trưng cho tác dụng làm quay. Tác dụng làm quay càng lớn khi lực tác dụng càng mạnh hoặc cánh tay đòn (khoảng cách từ trục quay đến giá của lực) càng dài."
+      },
+      {
+        q: "Lực đẩy Ác-si-mét tác dụng lên vật nhúng trong chất lỏng có phương và chiều như thế nào?",
+        opts: ["Phương thẳng đứng, chiều từ dưới lên trên", "Phương thẳng đứng, chiều từ trên xuống dưới", "Phương nằm ngang", "Tùy thuộc vào khối lượng của vật"],
+        ans: 0,
+        exp: "Lực đẩy Ác-si-mét luôn có phương thẳng đứng, chiều hướng ngược chiều trọng lực (từ dưới lên trên)."
+      },
+      {
+        q: "Công thức Định luật Ôm cho một đoạn mạch có điện trở R là:",
+        opts: ["I = U / R", "I = U · R", "R = U · I", "U = I / R"],
+        ans: 0,
+        exp: "Định luật Ôm: Cường độ dòng điện I tỉ lệ thuận với hiệu điện thế U và tỉ lệ nghịch với điện trở R: I = U / R."
+      },
+      {
+        q: "Thấu kính hội tụ có tiêu cự f. Một vật thật đặt cách thấu kính khoảng d > 2f sẽ cho ảnh gì?",
+        opts: ["Ảnh thật, ngược chiều và nhỏ hơn vật", "Ảnh thật, ngược chiều và lớn hơn vật", "Ảnh ảo, cùng chiều và lớn hơn vật", "Ảnh ảo, ngược chiều"],
+        ans: 0,
+        exp: "Khi vật thật ở ngoài khoảng 2f (d > 2f), thấu kính hội tụ luôn cho ảnh thật, ngược chiều và nhỏ hơn vật."
+      }
+    ];
+
+    let quizAnswers = {};
+
+    function renderQuiz() {
+      const container = document.getElementById('quizContainer');
+      container.innerHTML = QUIZ_DATA.map((item, idx) => `
+        <div class="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
+          <div class="font-bold text-sm text-slate-900 flex gap-2">
+            <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 text-xs flex items-center justify-center shrink-0">${idx+1}</span>
+            <span>${item.q}</span>
+          </div>
+          <div class="space-y-2 pl-8">
+            ${item.opts.map((opt, oIdx) => `
+              <label class="flex items-center gap-2.5 text-xs text-slate-700 cursor-pointer p-2 rounded-xl hover:bg-slate-50 border border-transparent transition-all">
+                <input type="radio" name="q-${idx}" value="${oIdx}" onchange="selectQuiz(${idx}, ${oIdx})" class="accent-emerald-600">
+                <span>${opt}</span>
+              </label>
+            `).join('')}
+          </div>
+          <div id="quiz-exp-${idx}" class="hidden text-xs p-3 rounded-xl bg-emerald-50 text-emerald-900 border border-emerald-200">
+            <strong>Giải thích:</strong> ${item.exp}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function selectQuiz(qIdx, optIdx) {
+      quizAnswers[qIdx] = optIdx;
+      let score = 0;
+      QUIZ_DATA.forEach((item, idx) => {
+        const expBox = document.getElementById(`quiz-exp-${idx}`);
+        if (quizAnswers[idx] !== undefined) {
+          expBox.classList.remove('hidden');
+          if (quizAnswers[idx] === item.ans) score++;
+        }
+      });
+      document.getElementById('quizScoreText').textContent = `${score} / ${QUIZ_DATA.length}`;
+    }
+
+    // 7. AI TUTOR (Direct Gemini API Call from Browser)
+    const KHTN_KNOWLEDGE = {
+      "phan luc": "Theo SGK KHTN (GDPT 2018): Khi vật A tác dụng lực lên vật B, vật B cũng tác dụng phản lực ngược trở lại vật A. Hai lực này gọi là **lực và phản lực**:\n- Đặc điểm: Cùng phương, ngược chiều, cùng độ lớn nhưng **đặt vào hai vật khác nhau** (không triệt tiêu nhau):\n$$\\vec{F}_{AB} = -\\vec{F}_{BA} \\implies F_{AB} = F_{BA}$$\n- Ví dụ: Chân đạp lùi xuống đất tạo phản lực đẩy người về trước; sách đè lên bàn sinh phản lực đỡ N thẳng đứng lên.",
+      "ohm": "Định luật Ôm (KHTN 9): Cường độ dòng điện chạy qua dây dẫn tỉ lệ thuận với hiệu điện thế giữa hai đầu dây và tỉ lệ nghịch với điện trở của dây:\n$$I = \\frac{U}{R}$$\nCông suất điện: $$P = U \\cdot I = I^2 \\cdot R = \\frac{U^2}{R} \\quad (\\text{W})$$",
+      "don bay": "Quy tắc đòn bẩy (KHTN 8): Khi đòn bẩy ở trạng thái cân bằng thì:\n$$F_1 \\cdot d_1 = F_2 \\cdot d_2$$\nLưu ý sư phạm: Thuật ngữ chuẩn KHTN 8 là **moment lực** (không dùng 'mômen'). Khi d1 > d2 thì F1 < F2 (được lợi về lực nâng vật nặng).",
+      "archimedes": "Lực đẩy Ác-si-mét (KHTN 8): Vật nhúng trong chất lỏng bị chất lỏng đẩy thẳng đứng từ dưới lên:\n$$F_{\\text{A}} = \\rho \\cdot g \\cdot V$$\n- Vật nổi khi: $F_{\\text{A}} > P \\iff \\rho_{\\text{lỏng}} > \\rho_{\\text{vật}}$\n- Vật lơ lửng khi: $F_{\\text{A}} = P \\iff \\rho_{\\text{lỏng}} = \\rho_{\\text{vật}}$\n- Vật chìm khi: $F_{\\text{A}} < P \\iff \\rho_{\\text{lỏng}} < \\rho_{\\text{vật}}$"
+    };
+
+    function sendQuickPrompt(txt) {
+      document.getElementById('chatInput').value = txt;
+      handleChatSubmit(new Event('submit'));
+    }
+
+    async function handleChatSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('chatInput');
+      const q = input.value.trim();
+      if (!q) return;
+
+      // Check if user pasted API Key
+      if (q.startsWith('AIzaSy') || (q.length >= 35 && /^[A-Za-z0-9_-]{35,}$/.test(q))) {
+        localStorage.setItem('physix_gemini_api_key', q);
+        initApiKey();
+        input.value = '';
+        appendChatMessage('user', '🔑 Cài đặt Gemini API Key: ' + q.substring(0, 10) + '••••••••••••••••••••');
+        appendChatMessage('ai', '🎉 **Đã kích hoạt thành công Google Gemini API!** Khóa đã được lưu vào trình duyệt. Bạn có thể hỏi bất kỳ bài tập nào để AI phân tích chuyên sâu.');
+        return;
+      }
+
+      appendChatMessage('user', q);
+      input.value = '';
+
+      const apiKey = localStorage.getItem('physix_gemini_api_key') || '';
+
+      if (apiKey) {
+        appendChatMessage('ai', '⏳ *Đang kết nối Google Gemini AI để giải đáp...*', 'loading-msg');
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: `Bạn là Gia sư AI Vật lý THCS Tây Tiến theo SGK KHTN GDPT 2018 (Lớp 6, 7, 8, 9). Hãy giải thích cặn kẽ câu hỏi sau, sử dụng công thức toán học LaTeX đặt trong $...$ hoặc $$...$$, dùng thuật ngữ 'moment lực' cho lớp 8:\n\n"${q}"`
+                }]
+              }]
+            })
+          });
+          const data = await res.json();
+          const loadingEl = document.getElementById('loading-msg');
+          if (loadingEl) loadingEl.remove();
+
+          if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+            appendChatMessage('ai', data.candidates[0].content.parts[0].text);
+          } else {
+            fallbackResponse(q);
+          }
+        } catch (err) {
+          const loadingEl = document.getElementById('loading-msg');
+          if (loadingEl) loadingEl.remove();
+          fallbackResponse(q);
+        }
+      } else {
+        fallbackResponse(q);
+      }
+    }
+
+    function fallbackResponse(q) {
+      const qLow = q.toLowerCase();
+      let answer = '';
+      if (qLow.includes('phản lực')) answer = KHTN_KNOWLEDGE['phan luc'];
+      else if (qLow.includes('ôm') || qLow.includes('ohm') || qLow.includes('điện trở')) answer = KHTN_KNOWLEDGE['ohm'];
+      else if (qLow.includes('đòn bẩy') || qLow.includes('moment')) answer = KHTN_KNOWLEDGE['don bay'];
+      else if (qLow.includes('ác-si-mét') || qLow.includes('archimedes') || qLow.includes('chìm')) answer = KHTN_KNOWLEDGE['archimedes'];
+      else {
+        answer = `Theo SGK Khoa Học Tự Nhiên THCS Tây Tiến (GDPT 2018):\n\nVề "${q}":\n- Các hiện tượng vật lý THCS bám sát trực quan thực tiễn và chuẩn đơn vị SI.\n- Bạn có thể chuyển sang tab **Phòng Thí Nghiệm** hoặc **Cảm Biến IoT** để trực quan hóa mô hình!\n\n💡 *Mẹo: Nhập Gemini API Key ở góc trên để AI trả lời phân tích chuyên sâu mọi bài tập nhé!*`;
+      }
+      appendChatMessage('ai', answer);
+    }
+
+    function appendChatMessage(sender, text, customId = '') {
+      const box = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = 'flex gap-2.5 ' + (sender === 'user' ? 'justify-end' : 'justify-start');
+      if (customId) div.id = customId;
+
+      if (sender === 'user') {
+        div.innerHTML = `
+          <div class="max-w-[85%] p-3.5 rounded-2xl rounded-tr-none bg-emerald-600 text-white font-medium shadow-xs leading-relaxed">
+            ${text}
+          </div>
+        `;
+      } else {
+        div.innerHTML = `
+          <div class="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">Ψ</div>
+          <div class="max-w-[85%] p-3.5 rounded-2xl rounded-tl-none bg-white border border-slate-200 text-slate-800 shadow-xs leading-relaxed space-y-1.5 whitespace-pre-wrap">
+            ${text}
+          </div>
+        `;
+      }
+
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+
+      if (window.renderMathInElement) {
+        renderMathInElement(div, { delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}] });
+      }
+    }
+
+    // INITIALIZATION
+    window.addEventListener('DOMContentLoaded', () => {
+      initApiKey();
+      renderQuiz();
+      updateArchimedesSim();
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, { delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}] });
+      }
+    });
+  </script>
+</body>
+</html>
