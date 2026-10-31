@@ -392,7 +392,7 @@
             <p class="font-bold text-emerald-800 mb-1">2. Mạch đo dòng & tải R:</p>
             <p>• Pin (+) ──► Biến trở 10k (chân 1)</p>
             <p>• Biến trở (chân giữa 2) ──► Vin+ (INA219)</p>
-            <p>• Vin- (INA219) ──► Điện trở R (100Ω)</p>
+            <p>• Vin- (INA219) ──► Điện trở R (120Ω)</p>
             <p>• Điện trở R đầu kia ──► Pin (-) và chung GND</p>
           </div>
         </div>
@@ -727,9 +727,9 @@
         t += 0.1;
         const baseU = 5.0 + Math.sin(t * 0.5) * 1.5;
         const noise = (Math.random() - 0.5) * 0.8;
-        const currentMA = (baseU / 100.0) * 1000.0 + noise;
+        const currentMA = (baseU / 120.0) * 1000.0 + noise;
         const currentA = currentMA / 1000.0;
-        const rCalc = currentA > 0 ? (baseU / currentA) : 100;
+        const rCalc = currentA > 0 ? (baseU / currentA) : 120;
         const pCalc = baseU * currentA;
 
         document.getElementById('live-u').textContent = baseU.toFixed(2);

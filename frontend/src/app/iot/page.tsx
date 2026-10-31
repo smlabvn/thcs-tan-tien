@@ -5,6 +5,7 @@ import {
   Download,
   Volume2,
   BarChart2,
+  LineChart,
   Bluetooth,
   Usb,
   CheckCircle2,
@@ -167,8 +168,8 @@ void loop() {
     baudRate: 115200,
     theoryFormula: "I = \\frac{U}{R}; \\quad P = U \\cdot I = I^2 \\cdot R",
     calcTheory: (voltage) => {
-      // Điện trở mẫu R = 100 Ohm -> I(mA) = (U / 100) * 1000 = U * 10
-      return voltage * 10;
+      // Điện trở mẫu R = 120 Ohm -> I(mA) = (U / 120) * 1000
+      return Number(((voltage / 120.0) * 1000.0).toFixed(1));
     },
     paramName: "Hiệu điện thế (U)",
     paramUnit: "V",
@@ -176,14 +177,10 @@ void loop() {
     paramMax: 12,
     paramDefault: 6,
     arduinoCode: `// ==============================================================
-// ARDUINO UNO + INA219 (DONG/AP) + MAN HINH OLED 0.96" SSD1306 (I2C)
+// ESP32 / ARDUINO + INA219 + OLED SSD1306 (I2C)
 // THCS TAY TIEN - MO HINH THI NGHIEM DINH LUAT OHM (KHTN 9)
+// Bien tro dieu khien: 10k Ohm (B10K) | Dien tro mau: 120 Ohm
 // ==============================================================
-// Can cai thu vien trong Arduino IDE:
-// 1. Adafruit INA219
-// 2. Adafruit SSD1306
-// 3. Adafruit GFX Library
-
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -191,84 +188,67 @@ void loop() {
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-#define OLED_RESET -1
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-Adafruit_INA219 ina219;
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+Adafruit_INA219 ina219(0x40);
 
 void setup() {
   Serial.begin(115200);
+  Wire.begin(21, 22); // ESP32: SDA=21, SCL=22
 
-  // Khoi tao cam bien INA219
-  if (!ina219.begin()) {
-    Serial.println("Loi: Khong tim thay INA219!");
-  }
+  ina219.begin();
+  ina219.setCalibration_32V_2A();
 
-  // Khoi tao man hinh OLED I2C dia chi 0x3C
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println("Loi: Khong tim thay man hinh OLED!");
-  }
-
-  // Man hinh chao mung ban dau
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
-  display.setTextColor(WHITE);
+  display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
-  display.setCursor(10, 15);
-  display.println("THCS TAY TIEN");
-  display.setCursor(10, 32);
-  display.println("DINH LUAT OHM (KHTN 9)");
+  display.setCursor(15, 20);
+  display.println(F("THCS TAY TIEN"));
+  display.setCursor(10, 36);
+  display.println(F("DINH LUAT OHM (120R)"));
   display.display();
   delay(1200);
 }
 
 void loop() {
-  // Doc thong so tu cam bien INA219
   float busVoltage_V = ina219.getBusVoltage_V();
-  float current_mA = ina219.getCurrent_mA();
-  if (current_mA < 0) current_mA = 0; // chong nhieu am
+  float current_mA   = ina219.getCurrent_mA();
+  if (current_mA < 0.2) current_mA = 0;
 
-  // Tinh toan Dien tro R (Ohm) va Cong suat P (W)
-  float resistance_Ohm = (current_mA > 1.0) ? (busVoltage_V / (current_mA / 1000.0)) : 0.0;
-  float power_W = busVoltage_V * (current_mA / 1000.0);
+  float current_A      = current_mA / 1000.0;
+  float resistance_Ohm = (current_mA > 1.0) ? (busVoltage_V / current_A) : 0.0;
 
   // 1. Truyen du lieu thoi gian thuc len Website PhysiX (Web Serial)
-  Serial.println(current_mA);
+  Serial.println(current_mA, 2);
 
-  // 2. Hien thi truc quan len man hinh OLED 0.96 inch
+  // 2. Hien thi truc quan len man hinh OLED
   display.clearDisplay();
-  
-  // Tieu de
   display.setTextSize(1);
   display.setCursor(0, 0);
-  display.println("THCS TAY TIEN - OHM");
-  display.drawLine(0, 10, 128, 10, WHITE);
+  display.println(F("THCS TAY TIEN - OHM"));
+  display.drawLine(0, 9, 128, 9, SSD1306_WHITE);
 
-  // Thong so U, I, R, P
-  display.setCursor(0, 15);
-  display.print("U: ");
-  display.print(busVoltage_V, 2);
-  display.println(" V");
+  display.setCursor(0, 14);
+  display.printf("U: %.2f V", busVoltage_V);
 
-  display.setCursor(0, 27);
-  display.print("I: ");
-  display.print(current_mA, 1);
-  display.println(" mA");
+  display.setCursor(0, 26);
+  display.printf("I: %.1f mA", current_mA);
 
-  display.setCursor(0, 39);
-  display.print("R: ");
-  if (resistance_Ohm > 0 && resistance_Ohm < 9999) {
-    display.print(resistance_Ohm, 1);
-    display.println(" Ohm");
+  display.setCursor(0, 38);
+  if (resistance_Ohm > 5.0 && resistance_Ohm < 500.0) {
+    display.printf("R: %.1f Ohm", resistance_Ohm);
   } else {
-    display.println("-- Ohm");
+    display.println(F("R: --- Ohm"));
   }
 
-  display.setCursor(0, 51);
-  display.print("P: ");
-  display.print(power_W, 3);
-  display.println(" W");
+  // Thanh do mini co gian theo dong dien 0 - 45mA
+  display.drawRect(0, 50, 128, 12, SSD1306_WHITE);
+  int fillWidth = map((int)current_mA, 0, 45, 0, 124);
+  if (fillWidth > 124) fillWidth = 124;
+  if (fillWidth > 0) display.fillRect(2, 52, fillWidth, 8, SSD1306_WHITE);
 
   display.display();
-  delay(100); // 10 lan moi giay
+  delay(100);
 }`
   }
 };
@@ -280,6 +260,7 @@ export default function VernierIoTPage() {
   const [isRecording, setIsRecording] = useState<boolean>(true);
   const [paramValue, setParamValue] = useState<number>(exp.paramDefault);
   const [telemetryList, setTelemetryList] = useState<TelemetryPoint[]>([]);
+  const [chartMode, setChartMode] = useState<"line" | "bar">("line");
 
   // Hardware connection states
   const [connectionType, setConnectionType] = useState<"none" | "serial" | "bluetooth" | "simulator">("simulator");
@@ -728,7 +709,7 @@ export default function VernierIoTPage() {
                     <div className="h-0.5 w-16 bg-purple-400" />
                     <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-300 text-center">
                       <div className="text-[10px] text-slate-500 font-bold">ĐIỆN TRỞ R</div>
-                      <div className="text-lg font-black font-mono text-slate-800 dark:text-slate-100">100 Ω</div>
+                      <div className="text-lg font-black font-mono text-slate-800 dark:text-slate-100">120 Ω</div>
                     </div>
                     <div className="h-0.5 w-16 bg-purple-400" />
                     <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950 border border-emerald-300 dark:border-emerald-800 text-center">
@@ -751,7 +732,7 @@ export default function VernierIoTPage() {
                   type="range"
                   min={exp.paramMin}
                   max={exp.paramMax}
-                  step={1}
+                  step={activeExp === "ohm" ? 0.1 : 1}
                   value={paramValue}
                   onChange={(e) => setParamValue(parseFloat(e.target.value))}
                   className="w-full accent-sky-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
@@ -761,49 +742,229 @@ export default function VernierIoTPage() {
 
             {/* DUAL TRACE STREAM: THEORY VS REAL-TIME SENSOR CURVE */}
             <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2 font-bold text-xs">
-                  <BarChart2 className="w-4 h-4 text-sky-600" />
+                  {chartMode === "line" ? (
+                    <LineChart className="w-4 h-4 text-amber-500" />
+                  ) : (
+                    <BarChart2 className="w-4 h-4 text-sky-600" />
+                  )}
                   <span>ĐỐI SÁNH THỜI GIAN THỰC: LÝ THUYẾT VS CẢM BIẾN THỰC NGHIỆM</span>
                 </div>
-                <div className="flex items-center gap-4 font-mono text-xs">
-                  <span className="flex items-center gap-1.5 text-sky-600 font-bold">
-                    <span className="w-2.5 h-2.5 rounded-full bg-sky-500" /> Lý thuyết: {theoryValue.toFixed(1)} {exp.defaultUnit}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-amber-600 font-bold">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Cảm biến đo: {latestVal} {exp.defaultUnit}
-                  </span>
+
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Mode switcher pills */}
+                  <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setChartMode("line")}
+                      className={`px-2.5 py-1 rounded-md flex items-center gap-1 transition-all ${
+                        chartMode === "line"
+                          ? "bg-white dark:bg-slate-700 text-amber-600 shadow-xs"
+                          : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      <LineChart className="w-3.5 h-3.5" />
+                      <span>Đồ thị đường</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChartMode("bar")}
+                      className={`px-2.5 py-1 rounded-md flex items-center gap-1 transition-all ${
+                        chartMode === "bar"
+                          ? "bg-white dark:bg-slate-700 text-sky-600 shadow-xs"
+                          : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      <BarChart2 className="w-3.5 h-3.5" />
+                      <span>Dạng cột</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3 font-mono text-xs">
+                    <span className="flex items-center gap-1.5 text-sky-600 font-bold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-sky-500" /> Lý thuyết: {theoryValue.toFixed(1)} {exp.defaultUnit}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-amber-600 font-bold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Cảm biến đo: {latestVal} {exp.defaultUnit}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Bar trace stream */}
-              <div className="h-44 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 p-2.5 flex items-end gap-1.5 overflow-hidden shadow-inner">
-                {telemetryList.length === 0 ? (
-                  <div className="w-full h-full flex items-center justify-center text-xs text-slate-400 font-mono">
-                    Đang đợi xung tín hiệu từ cảm biến...
-                  </div>
-                ) : (
-                  telemetryList.map((pt, i) => {
-                    // Normalize relative to maximum expected value
-                    const maxVal = Math.max(1, theoryValue * 1.5, ...telemetryList.map((p) => p.measured));
-                    const pctMeasured = Math.max(5, Math.min(100, (pt.measured / maxVal) * 100));
-                    const pctTheory = Math.max(5, Math.min(100, (pt.theory / maxVal) * 100));
+              {/* Chart container */}
+              {chartMode === "line" ? (
+                <div className="h-52 bg-slate-950 rounded-xl border border-slate-800 p-2.5 overflow-hidden shadow-inner flex flex-col justify-between">
+                  {telemetryList.length === 0 ? (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-500 font-mono">
+                      Đang đợi xung tín hiệu từ cảm biến...
+                    </div>
+                  ) : (() => {
+                    const N = telemetryList.length;
+                    const maxData = Math.max(1, theoryValue * 1.25, ...telemetryList.map((p) => Math.max(p.measured, p.theory)));
+                    const yMax = Math.ceil(maxData * 1.15) || 10;
+                    const width = 800;
+                    const height = 195;
+                    const padLeft = 45;
+                    const padRight = 20;
+                    const padTop = 15;
+                    const padBottom = 22;
+                    const plotW = width - padLeft - padRight;
+                    const plotH = height - padTop - padBottom;
+
+                    const getX = (idx: number) => padLeft + (N > 1 ? (idx / (N - 1)) * plotW : plotW / 2);
+                    const getY = (val: number) => padTop + plotH - Math.min(plotH, Math.max(0, (val / yMax) * plotH));
+
+                    const measuredPoints = telemetryList.map((pt, i) => ({
+                      x: getX(i),
+                      y: getY(pt.measured),
+                      val: pt.measured,
+                    }));
+                    const theoryPoints = telemetryList.map((pt, i) => ({
+                      x: getX(i),
+                      y: getY(pt.theory),
+                      val: pt.theory,
+                    }));
+
+                    const measuredLine = measuredPoints
+                      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+                      .join(" ");
+                    const theoryLine = theoryPoints
+                      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+                      .join(" ");
+
+                    const lastX = measuredPoints[measuredPoints.length - 1].x.toFixed(1);
+                    const firstX = measuredPoints[0].x.toFixed(1);
+                    const baseY = (padTop + plotH).toFixed(1);
+                    const areaFill = `${measuredLine} L ${lastX} ${baseY} L ${firstX} ${baseY} Z`;
+
+                    const lastPt = measuredPoints[measuredPoints.length - 1];
+                    const gridSteps = [0, 0.25, 0.5, 0.75, 1];
 
                     return (
-                      <div key={i} className="flex-1 flex items-end justify-center gap-0.5 h-full group relative">
-                        <div
-                          className="w-1/2 bg-sky-400/60 dark:bg-sky-500/50 rounded-t transition-all duration-75"
-                          style={{ height: `${pctTheory}%` }}
+                      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full select-none">
+                        <defs>
+                          <linearGradient id="sensorGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.4" />
+                            <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+
+                        {/* Grid lines and Y labels */}
+                        {gridSteps.map((step, idx) => {
+                          const val = yMax * step;
+                          const y = padTop + plotH - step * plotH;
+                          return (
+                            <g key={idx}>
+                              <line
+                                x1={padLeft}
+                                y1={y}
+                                x2={width - padRight}
+                                y2={y}
+                                stroke="#1e293b"
+                                strokeDasharray="3 3"
+                                strokeWidth="1"
+                              />
+                              <text
+                                x={padLeft - 6}
+                                y={y + 3.5}
+                                textAnchor="end"
+                                fill="#64748b"
+                                fontSize="10"
+                                fontFamily="monospace"
+                              >
+                                {val.toFixed(0)}
+                              </text>
+                            </g>
+                          );
+                        })}
+
+                        {/* Unit label */}
+                        <text x={padLeft} y={11} fill="#64748b" fontSize="9" fontFamily="monospace">
+                          ({exp.defaultUnit})
+                        </text>
+
+                        {/* Area gradient under measured line */}
+                        <path d={areaFill} fill="url(#sensorGrad)" />
+
+                        {/* Theory dashed curve (Sky blue) */}
+                        <path
+                          d={theoryLine}
+                          fill="none"
+                          stroke="#38bdf8"
+                          strokeWidth="2"
+                          strokeDasharray="6 4"
                         />
-                        <div
-                          className="w-1/2 bg-amber-500 rounded-t transition-all duration-75"
-                          style={{ height: `${pctMeasured}%` }}
+
+                        {/* Measured solid curve (Amber) */}
+                        <path
+                          d={measuredLine}
+                          fill="none"
+                          stroke="#f59e0b"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
                         />
-                      </div>
+
+                        {/* Measured data dots */}
+                        {measuredPoints.map((p, i) => (
+                          <circle
+                            key={i}
+                            cx={p.x}
+                            cy={p.y}
+                            r={i === measuredPoints.length - 1 ? 4 : 2}
+                            fill="#f59e0b"
+                            stroke="#0f172a"
+                            strokeWidth="1"
+                          />
+                        ))}
+
+                        {/* Active ping animation at the current live point */}
+                        {lastPt && (
+                          <circle
+                            cx={lastPt.x}
+                            cy={lastPt.y}
+                            r="7"
+                            fill="none"
+                            stroke="#fbbf24"
+                            strokeWidth="1.5"
+                            className="animate-ping"
+                            opacity="0.8"
+                          />
+                        )}
+                      </svg>
                     );
-                  })
-                )}
-              </div>
+                  })()}
+                </div>
+              ) : (
+                /* Bar trace stream (Dạng cột cũ) */
+                <div className="h-52 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 p-2.5 flex items-end gap-1.5 overflow-hidden shadow-inner">
+                  {telemetryList.length === 0 ? (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-400 font-mono">
+                      Đang đợi xung tín hiệu từ cảm biến...
+                    </div>
+                  ) : (
+                    telemetryList.map((pt, i) => {
+                      const maxVal = Math.max(1, theoryValue * 1.5, ...telemetryList.map((p) => p.measured));
+                      const pctMeasured = Math.max(5, Math.min(100, (pt.measured / maxVal) * 100));
+                      const pctTheory = Math.max(5, Math.min(100, (pt.theory / maxVal) * 100));
+
+                      return (
+                        <div key={i} className="flex-1 flex items-end justify-center gap-0.5 h-full group relative">
+                          <div
+                            className="w-1/2 bg-sky-400/60 dark:bg-sky-500/50 rounded-t transition-all duration-75"
+                            style={{ height: `${pctTheory}%` }}
+                          />
+                          <div
+                            className="w-1/2 bg-amber-500 rounded-t transition-all duration-75"
+                            style={{ height: `${pctMeasured}%` }}
+                          />
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
 
               {/* Stats footer */}
               <div className="flex items-center justify-between text-xs font-mono text-slate-600 dark:text-slate-400 pt-1">
