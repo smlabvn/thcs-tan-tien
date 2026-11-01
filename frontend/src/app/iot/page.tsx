@@ -196,7 +196,7 @@ void loop() {
     id: "ultrasonic",
     grade: "KHTN 7 & Vật lý 10",
     title: "Đo Thời Gian & Tốc Độ Chuyển Động (2 Cổng Quang Điện Hồng Ngoại)",
-    sensorName: "2 Cổng quang điện hồng ngoại (Gate A: GPIO 14, Gate B: GPIO 25)",
+    sensorName: "2 Cổng quang điện hồng ngoại (Gate A: GPIO 13, Gate B: GPIO 25)",
     defaultUnit: "cm/s",
     sampleRate: "50.0 Hz",
     baudRate: 115200,
@@ -213,7 +213,7 @@ void loop() {
     arduinoCode: `// ================================================================
 // HỘP THÍ NGHIỆM KHTN 7 & VẬT LÝ 10: ĐO THỜI GIAN & TỐC ĐỘ (s - t - v)
 // Cảm biến: 2 Cổng quang điện hồng ngoại (Photogates / Cảm biến chữ U)
-// Cổng quang A (Bắt đầu): Chân DO -> GPIO 14
+// Cổng quang A (Bắt đầu): Chân DO -> GPIO 13
 // Cổng quang B (Kết thúc): Chân DO -> GPIO 25 (Lưu ý: Không dùng GPIO 12 vì là strapping pin)
 // Vi điều khiển: ESP32 (Type-C WROOM-32)
 // Màn hình OLED: SDA -> GPIO 21, SCL -> GPIO 22
@@ -228,7 +228,7 @@ void loop() {
 #define SCREEN_HEIGHT 64
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-const int GATE_A_PIN = 14; // Cổng quang A (Vị trí 1) nối GPIO 14
+const int GATE_A_PIN = 13; // Cổng quang A (Vị trí 1) nối GPIO 13
 const int GATE_B_PIN = 25; // Cổng quang B (Vị trí 2) nối GPIO 25 (Tránh dùng GPIO 12 để không kẹt bootloader)
 
 const int BTN_START  = 18; // Nút 1: Bắt đầu / Tạm dừng
@@ -265,7 +265,7 @@ void setup() {
   Serial.begin(115200);
   delay(200);
   Serial.println(F("\n>> HE THONG 2 CONG QUANG DA KHOI DONG THANH CONG! <<"));
-  Serial.println(F("Cong A: GPIO 14 | Cong B: GPIO 25. San sang!"));
+  Serial.println(F("Cong A: GPIO 13 | Cong B: GPIO 25. San sang!"));
   pinMode(GATE_A_PIN, INPUT_PULLUP);
   pinMode(GATE_B_PIN, INPUT_PULLUP);
   pinMode(BTN_START, INPUT_PULLUP);
@@ -371,7 +371,7 @@ void loop() {
     display.printf("Quang duong s: %.0f cm", DISTANCE_S_CM);
 
     display.setCursor(0, 34);
-    display.print(F("A: GPIO 14 | B: GPIO 25"));
+    display.print(F("A: GPIO 13 | B: GPIO 25"));
 
     display.setCursor(0, 50);
     display.print(F("Bam Nut 2 de Reset"));
@@ -1174,7 +1174,7 @@ export default function VernierIoTPage() {
                     {/* Cổng quang A */}
                     <div className="w-16 h-28 rounded-xl bg-sky-50 dark:bg-sky-950/80 border-2 border-sky-400 flex flex-col items-center justify-center text-sky-700 z-10 shadow-sm">
                       <span className="text-[10px] font-black text-sky-600">CỔNG A</span>
-                      <span className="text-[8px] font-mono text-slate-500">GPIO 14</span>
+                      <span className="text-[8px] font-mono text-slate-500">GPIO 13</span>
                       <div className="w-3 h-12 bg-slate-800 rounded-sm mt-1 relative flex items-center justify-center">
                         <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                       </div>
