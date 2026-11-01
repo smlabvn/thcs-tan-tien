@@ -192,25 +192,27 @@ void loop() {
   },
   ultrasonic: {
     id: "ultrasonic",
-    grade: "KHTN 7",
-    title: "Đo Quãng Đường, Thời Gian & Tốc Độ Chuyển Động (s - t - v)",
-    sensorName: "Cảm biến Siêu âm HC-SR04 (Trig=12, Echo=13)",
-    defaultUnit: "cm",
-    sampleRate: "20.0 Hz",
+    grade: "KHTN 7 & Vật lý 10",
+    title: "Đo Thời Gian & Tốc Độ Chuyển Động (2 Cổng Quang Điện Hồng Ngoại)",
+    sensorName: "2 Cổng quang điện hồng ngoại (Gate A: GPIO 14, Gate B: GPIO 12)",
+    defaultUnit: "cm/s",
+    sampleRate: "50.0 Hz",
     baudRate: 115200,
-    theoryFormula: "v = \\frac{s}{t}; \\quad s(t) = v_0 \\cdot t + \\frac{1}{2} a t^2",
-    calcTheory: (t) => {
-      // Xe chuyển động đều với v = 25 cm/s
-      return Math.min(100, 10 + 25 * (t % 4));
+    theoryFormula: "v = \\frac{s}{\\Delta t}; \\quad \\Delta t = t_B - t_A; \\quad a = \\frac{2(s - v_0 t)}{t^2}",
+    calcTheory: (s) => {
+      // Xe chuyển động từ Cổng A sang B cách nhau s (cm) với tốc độ trung bình v = 35 cm/s
+      return 35.0;
     },
-    paramName: "Thời gian xe chạy",
-    paramUnit: "s",
-    paramMin: 0,
-    paramMax: 10,
-    paramDefault: 2,
+    paramName: "Khoảng cách giữa 2 cổng quang (s)",
+    paramUnit: "cm",
+    paramMin: 10,
+    paramMax: 80,
+    paramDefault: 30,
     arduinoCode: `// ================================================================
-// HỘP THÍ NGHIỆM KHTN 7: ĐO QUÃNG ĐƯỜNG, THỜI GIAN & TỐC ĐỘ (s - t - v)
-// Cảm biến: Siêu âm HC-SR04 (Trig -> GPIO 12, Echo -> GPIO 13)
+// HỘP THÍ NGHIỆM KHTN 7 & VẬT LÝ 10: ĐO THỜI GIAN & TỐC ĐỘ (s - t - v)
+// Cảm biến: 2 Cổng quang điện hồng ngoại (Photogates / Cảm biến chữ U)
+// Cổng quang A (Bắt đầu): Chân DO -> GPIO 14
+// Cổng quang B (Kết thúc): Chân DO -> GPIO 12
 // Vi điều khiển: ESP32 (Type-C WROOM-32)
 // Màn hình OLED: SDA -> GPIO 21, SCL -> GPIO 22
 // 2 Nút nhấn: Nút 1 Start/Stop (GPIO 18), Nút 2 Reset (GPIO 19)
@@ -224,33 +226,85 @@ void loop() {
 #define SCREEN_HEIGHT 64
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-const int TRIG_PIN  = 12; // Chân Trig nối GPIO 12
-const int ECHO_PIN  = 13; // Chân Echo nối GPIO 13
-const int BTN_START = 18; // Nút 1: Bắt đầu / Tạm dừng
-const int BTN_RESET = 19; // Nút 2: Đặt lại
+const int GATE_A_PIN = 14; // Cổng quang A (Vị trí 1) nối GPIO 14
+const int GATE_B_PIN = 12; // Cổng quang B (Vị trí 2) nối GPIO 12
+
+const int BTN_START  = 18; // Nút 1: Bắt đầu / Tạm dừng
+const int BTN_RESET  = 19; // Nút 2: Đặt lại đo lượt mới
+
+// Khoảng cách thực tế giữa 2 cổng quang trên máng nghiêng (cm)
+// Học sinh có thể đo bằng thước kẹp/thước dây rồi chỉnh số này
+const float DISTANCE_S_CM = 30.0; // 30 cm = 0.3 m
+
+volatile unsigned long timeA_us = 0;
+volatile unsigned long timeB_us = 0;
+volatile bool passA = false;
+volatile bool passB = false;
+
+// Ngắt phần cứng cổng quang A: khi cờ chắn sáng cắt qua cổng A
+void IRAM_ATTR isrGateA() {
+  if (!passA) {
+    timeA_us = micros();
+    passA = true;
+  }
+}
+
+// Ngắt phần cứng cổng quang B: khi cờ chắn sáng cắt qua cổng B
+void IRAM_ATTR isrGateB() {
+  if (passA && !passB) {
+    timeB_us = micros();
+    passB = true;
+  }
+}
 
 bool isRunning = true;
 
 void setup() {
   Serial.begin(115200);
 
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
+  // Kích hoạt trở kéo lên nội cho cổng quang & nút nhấn
+  pinMode(GATE_A_PIN, INPUT_PULLUP);
+  pinMode(GATE_B_PIN, INPUT_PULLUP);
   pinMode(BTN_START, INPUT_PULLUP);
   pinMode(BTN_RESET, INPUT_PULLUP);
+
+  // Đăng ký ngắt phần cứng độ chính xác micro-giây
+  // FALLING: Kích hoạt khi cờ chắn tia hồng ngoại (tín hiệu tụt xuống mức LOW)
+  attachInterrupt(digitalPinToInterrupt(GATE_A_PIN), isrGateA, FALLING);
+  attachInterrupt(digitalPinToInterrupt(GATE_B_PIN), isrGateB, FALLING);
 
   Wire.begin(21, 22);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
-  display.setCursor(5, 25);
-  display.println(F("KHTN 7: SIEU AM HC-SR04"));
+  display.setCursor(5, 18);
+  display.println(F("KHTN: DONG HO HIEN SO"));
+  display.setCursor(5, 34);
+  display.println(F("2 Cong Quang Dien (IR)"));
   display.display();
-  delay(800);
+  delay(1000);
 }
 
 void loop() {
+  // 1. Nút 2 (GPIO 19): Đặt lại để đo lượt chạy mới
+  if (digitalRead(BTN_RESET) == LOW) {
+    delay(50);
+    if (digitalRead(BTN_RESET) == LOW) {
+      passA = false;
+      passB = false;
+      timeA_us = 0;
+      timeB_us = 0;
+      display.clearDisplay();
+      display.setCursor(15, 25);
+      display.println(F("SAN SANG DO MOI!"));
+      display.display();
+      delay(400);
+      while (digitalRead(BTN_RESET) == LOW) delay(10);
+    }
+  }
+
+  // 2. Nút 1 (GPIO 18): Tạm dừng / Tiếp tục
   if (digitalRead(BTN_START) == LOW) {
     delay(50);
     if (digitalRead(BTN_START) == LOW) {
@@ -259,34 +313,67 @@ void loop() {
     }
   }
 
-  // Phát xung siêu âm 10 micro giây
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
+  // 3. Xử lý khi xe lăn đã chạy qua cả 2 cổng quang
+  if (passA && passB) {
+    // Tính khoảng thời gian di chuyển (đổi sang giây)
+    float delta_t_sec = (timeB_us - timeA_us) / 1000000.0;
+    
+    // Tính tốc độ v = s / t (cm/s)
+    float velocity_cms = (delta_t_sec > 0.0001) ? (DISTANCE_S_CM / delta_t_sec) : 0;
 
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // Timeout 30ms (~5 mét)
-  float distanceCm = (duration > 0) ? (duration * 0.0343 / 2.0) : 0;
+    // Gửi tốc độ (cm/s) lên web PhysiX qua cáp Type-C Serial
+    if (isRunning) {
+      Serial.println(velocity_cms, 2);
+    }
 
-  if (isRunning) {
-    Serial.println(distanceCm, 1);
+    // Hiển thị kết quả chi tiết trên OLED
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.print(F("KET QUA: 2 CONG QUANG"));
+
+    display.setCursor(0, 16);
+    display.setTextSize(2);
+    display.printf("%.1f cm/s", velocity_cms);
+
+    display.setTextSize(1);
+    display.setCursor(0, 38);
+    display.printf("t: %.3f s | s: %.0fcm", delta_t_sec, DISTANCE_S_CM);
+
+    display.setCursor(0, 50);
+    display.printf("v = %.3f m/s", velocity_cms / 100.0);
+    display.display();
+  } else if (passA && !passB) {
+    // Xe vừa đi qua cổng A, đang trên đường đến cổng B
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(0, 5);
+    display.println(F("DANG CHAY..."));
+    display.setCursor(0, 25);
+    display.setTextSize(2);
+    display.println(F("GATE A -> B"));
+    display.setTextSize(1);
+    display.setCursor(0, 50);
+    display.println(F("Cho cat tia cong B..."));
+    display.display();
+  } else {
+    // Trạng thái chờ xuất phát
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.print(F("CHO XE QUA CONG A..."));
+
+    display.setCursor(0, 18);
+    display.setTextSize(1);
+    display.printf("Quang duong s: %.0f cm", DISTANCE_S_CM);
+
+    display.setCursor(0, 34);
+    display.print(F("A: GPIO 14 | B: GPIO 12"));
+
+    display.setCursor(0, 50);
+    display.print(F("Bam Nut 2 de Reset"));
+    display.display();
   }
-
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.print(F("HC-SR04 MOTION | "));
-  display.print(isRunning ? F("RUN") : F("PAUSE"));
-
-  display.setCursor(0, 18);
-  display.setTextSize(2);
-  display.printf("%.1f cm", distanceCm);
-
-  display.setTextSize(1);
-  display.setCursor(0, 42);
-  display.printf("v_sound: 343 m/s");
-  display.display();
 
   delay(60);
 }`
@@ -1076,29 +1163,52 @@ export default function VernierIoTPage() {
                 )}
 
                 {activeExp === "ultrasonic" && (
-                  <div className="w-full flex items-center justify-between relative">
-                    <div className="w-16 h-24 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 border-2 border-emerald-400 flex flex-col items-center justify-center text-emerald-700 z-10">
-                      <span className="text-[10px] font-bold">HC-SR04</span>
-                      <div className="flex gap-1 mt-1">
-                        <div className="w-3 h-3 rounded-full bg-slate-300 border border-slate-500" />
-                        <div className="w-3 h-3 rounded-full bg-slate-300 border border-slate-500" />
+                  <div className="w-full flex items-center justify-between relative px-2">
+                    {/* Cổng quang A */}
+                    <div className="w-16 h-28 rounded-xl bg-sky-50 dark:bg-sky-950/80 border-2 border-sky-400 flex flex-col items-center justify-center text-sky-700 z-10 shadow-sm">
+                      <span className="text-[10px] font-black text-sky-600">CỔNG A</span>
+                      <span className="text-[8px] font-mono text-slate-500">GPIO 14</span>
+                      <div className="w-3 h-12 bg-slate-800 rounded-sm mt-1 relative flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                       </div>
+                      <span className="text-[8px] font-bold text-sky-700 dark:text-sky-300 mt-1">Xuất phát</span>
                     </div>
-                    <div className="flex-1 h-1 bg-dashed border-t-2 border-dashed border-emerald-400 relative mx-4">
-                      {/* Moving cart */}
-                      <div
-                        className="absolute -top-6 -translate-x-1/2 flex flex-col items-center transition-all duration-100"
-                        style={{ left: `${Math.min(95, Math.max(5, (latestVal / 100) * 100))}%` }}
-                      >
-                        <div className="w-14 h-8 bg-amber-500 rounded-lg shadow-md border border-amber-600 flex items-center justify-center text-white text-[10px] font-bold">
-                          Xe trượt
+
+                    {/* Máng nghiêng & Quãng đường s */}
+                    <div className="flex-1 h-14 relative mx-3 flex flex-col justify-center">
+                      <div className="w-full h-2 bg-slate-300 dark:bg-slate-700 rounded-full relative">
+                        {/* Vạch khoảng cách s */}
+                        <div className="absolute -top-5 left-0 right-0 flex items-center justify-center">
+                          <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-sky-700 dark:text-sky-300 shadow-xs">
+                            Quãng đường s = {paramValue} cm
+                          </span>
                         </div>
-                        <span className="font-mono text-[10px] font-bold text-slate-700 dark:text-slate-200 mt-1">
-                          d = {latestVal} cm
-                        </span>
+                        {/* Xe lăn có cờ chắn sáng */}
+                        <div
+                          className="absolute -top-7 -translate-x-1/2 flex flex-col items-center transition-all duration-100"
+                          style={{ left: `${Math.min(90, Math.max(10, ((latestVal || 35) / 70) * 100))}%` }}
+                        >
+                          {/* Cờ chắn sáng */}
+                          <div className="w-1 h-4 bg-slate-900 dark:bg-white" />
+                          <div className="w-12 h-6 bg-amber-500 rounded-md shadow-md border border-amber-600 flex items-center justify-center text-white text-[9px] font-bold">
+                            Xe lăn
+                          </div>
+                          <span className="font-mono text-[9px] font-bold text-amber-700 dark:text-amber-300 mt-0.5">
+                            v = {latestVal} cm/s
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <div className="w-4 h-24 bg-slate-400 rounded-r" />
+
+                    {/* Cổng quang B */}
+                    <div className="w-16 h-28 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 border-2 border-emerald-400 flex flex-col items-center justify-center text-emerald-700 z-10 shadow-sm">
+                      <span className="text-[10px] font-black text-emerald-600">CỔNG B</span>
+                      <span className="text-[8px] font-mono text-slate-500">GPIO 12</span>
+                      <div className="w-3 h-12 bg-slate-800 rounded-sm mt-1 relative flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                      </div>
+                      <span className="text-[8px] font-bold text-emerald-600 mt-1">Về đích</span>
+                    </div>
                   </div>
                 )}
 
