@@ -6,6 +6,8 @@ import {
   Volume2,
   BarChart2,
   LineChart,
+  ZoomIn,
+  ZoomOut,
   Bluetooth,
   Usb,
   CheckCircle2,
@@ -261,6 +263,7 @@ export default function VernierIoTPage() {
   const [paramValue, setParamValue] = useState<number>(exp.paramDefault);
   const [telemetryList, setTelemetryList] = useState<TelemetryPoint[]>([]);
   const [chartMode, setChartMode] = useState<"line" | "bar">("line");
+  const [zoomFocus, setZoomFocus] = useState<boolean>(false);
 
   // Hardware connection states
   const [connectionType, setConnectionType] = useState<"none" | "serial" | "bluetooth" | "simulator">("simulator");
@@ -752,7 +755,22 @@ export default function VernierIoTPage() {
                   <span>ĐỐI SÁNH THỜI GIAN THỰC: LÝ THUYẾT VS CẢM BIẾN THỰC NGHIỆM</span>
                 </div>
 
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Zoom focus button */}
+                  <button
+                    type="button"
+                    onClick={() => setZoomFocus(!zoomFocus)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 border transition-all ${
+                      zoomFocus
+                        ? "bg-amber-500 text-slate-950 border-amber-400 shadow-sm"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-200"
+                    }`}
+                    title="Phóng to dải biến thiên để nhìn rõ từng gợn sóng nhỏ nhất của cảm biến"
+                  >
+                    {zoomFocus ? <ZoomOut className="w-3.5 h-3.5" /> : <ZoomIn className="w-3.5 h-3.5" />}
+                    <span>{zoomFocus ? "Thu nhỏ (Toàn dải 0→Max)" : "🔍 Phóng to biến thiên"}</span>
+                  </button>
+
                   {/* Mode switcher pills */}
                   <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-[11px] font-bold">
                     <button
@@ -780,40 +798,94 @@ export default function VernierIoTPage() {
                       <span>Dạng cột</span>
                     </button>
                   </div>
-
-                  <div className="flex items-center gap-3 font-mono text-xs">
-                    <span className="flex items-center gap-1.5 text-sky-600 font-bold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-sky-500" /> Lý thuyết: {theoryValue.toFixed(1)} {exp.defaultUnit}
-                    </span>
-                    <span className="flex items-center gap-1.5 text-amber-600 font-bold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Cảm biến đo: {latestVal} {exp.defaultUnit}
-                    </span>
-                  </div>
                 </div>
               </div>
 
+              {/* Dynamic Value Tracker Badges */}
+              {(() => {
+                const vals = telemetryList.map((p) => p.measured);
+                const cur = vals.length > 0 ? vals[vals.length - 1] : 0;
+                const prev = vals.length > 1 ? vals[vals.length - 2] : cur;
+                const delta = cur - prev;
+                const minV = vals.length > 0 ? Math.min(...vals) : 0;
+                const maxV = vals.length > 0 ? Math.max(...vals) : 0;
+                const span = maxV - minV;
+
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                      <div className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Giá trị tức thời</div>
+                      <div className="text-xl font-black font-mono text-amber-500 mt-0.5 flex items-baseline gap-1">
+                        <span>{cur.toFixed(2)}</span>
+                        <span className="text-xs font-semibold">{exp.defaultUnit}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                      <div className="text-[10px] uppercase font-bold text-slate-500">Độ biến thiên (Δ)</div>
+                      <div className={`text-xl font-black font-mono mt-0.5 flex items-baseline gap-1 ${
+                        delta > 0.05 ? "text-emerald-500" : delta < -0.05 ? "text-rose-500" : "text-slate-400"
+                      }`}>
+                        <span>{delta >= 0 ? `+${delta.toFixed(2)}` : delta.toFixed(2)}</span>
+                        <span className="text-xs font-semibold">{exp.defaultUnit}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-300/40">
+                      <div className="text-[10px] uppercase font-bold text-sky-600 dark:text-sky-400">Lý thuyết chuẩn</div>
+                      <div className="text-xl font-black font-mono text-sky-600 dark:text-sky-400 mt-0.5 flex items-baseline gap-1">
+                        <span>{theoryValue.toFixed(1)}</span>
+                        <span className="text-xs font-semibold">{exp.defaultUnit}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                      <div className="text-[10px] uppercase font-bold text-slate-500">Dải Min → Max</div>
+                      <div className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 mt-1 flex flex-col justify-center">
+                        <div>Min: <span className="text-sky-500">{minV.toFixed(1)}</span> | Max: <span className="text-amber-500">{maxV.toFixed(1)}</span></div>
+                        <div className="text-[10px] text-slate-400 font-normal">Biên độ: ±{(span / 2).toFixed(2)} {exp.defaultUnit}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Chart container */}
               {chartMode === "line" ? (
-                <div className="h-52 bg-slate-950 rounded-xl border border-slate-800 p-2.5 overflow-hidden shadow-inner flex flex-col justify-between">
+                <div className="h-64 bg-slate-950 rounded-xl border border-slate-800 p-2 overflow-hidden shadow-inner flex flex-col justify-between">
                   {telemetryList.length === 0 ? (
                     <div className="w-full h-full flex items-center justify-center text-xs text-slate-500 font-mono">
                       Đang đợi xung tín hiệu từ cảm biến...
                     </div>
                   ) : (() => {
                     const N = telemetryList.length;
-                    const maxData = Math.max(1, theoryValue * 1.25, ...telemetryList.map((p) => Math.max(p.measured, p.theory)));
-                    const yMax = Math.ceil(maxData * 1.15) || 10;
+                    const vals = telemetryList.map((p) => p.measured);
+                    const minMeas = Math.min(...vals, theoryValue);
+                    const maxMeas = Math.max(...vals, theoryValue);
+                    const spread = Math.max(0.8, maxMeas - minMeas);
+
+                    let yMin = 0;
+                    let yMax = Math.ceil(Math.max(1, theoryValue * 1.25, maxMeas) * 1.15) || 10;
+
+                    if (zoomFocus) {
+                      // Zoom in tight around the data fluctuations
+                      yMin = Math.max(0, parseFloat((minMeas - spread * 0.35).toFixed(1)));
+                      yMax = parseFloat((maxMeas + spread * 0.35).toFixed(1));
+                      if (yMax <= yMin) yMax = yMin + 5;
+                    }
+
+                    const yRange = Math.max(0.1, yMax - yMin);
                     const width = 800;
-                    const height = 195;
-                    const padLeft = 45;
-                    const padRight = 20;
-                    const padTop = 15;
-                    const padBottom = 22;
+                    const height = 230;
+                    const padLeft = 52;
+                    const padRight = 25;
+                    const padTop = 22;
+                    const padBottom = 26;
                     const plotW = width - padLeft - padRight;
                     const plotH = height - padTop - padBottom;
 
                     const getX = (idx: number) => padLeft + (N > 1 ? (idx / (N - 1)) * plotW : plotW / 2);
-                    const getY = (val: number) => padTop + plotH - Math.min(plotH, Math.max(0, (val / yMax) * plotH));
+                    const getY = (val: number) => padTop + plotH - Math.min(plotH, Math.max(0, ((val - yMin) / yRange) * plotH));
 
                     const measuredPoints = telemetryList.map((pt, i) => ({
                       x: getX(i),
@@ -833,26 +905,31 @@ export default function VernierIoTPage() {
                       .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
                       .join(" ");
 
-                    const lastX = measuredPoints[measuredPoints.length - 1].x.toFixed(1);
+                    const lastPt = measuredPoints[measuredPoints.length - 1];
                     const firstX = measuredPoints[0].x.toFixed(1);
+                    const lastX = lastPt.x.toFixed(1);
                     const baseY = (padTop + plotH).toFixed(1);
                     const areaFill = `${measuredLine} L ${lastX} ${baseY} L ${firstX} ${baseY} Z`;
 
-                    const lastPt = measuredPoints[measuredPoints.length - 1];
                     const gridSteps = [0, 0.25, 0.5, 0.75, 1];
+                    const timeMarkers = ["-5s", "-4s", "-3s", "-2s", "-1s", "0s (Hiện tại)"];
 
                     return (
                       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full select-none">
                         <defs>
                           <linearGradient id="sensorGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.4" />
+                            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.45" />
                             <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" />
                           </linearGradient>
+                          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="3" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                          </filter>
                         </defs>
 
                         {/* Grid lines and Y labels */}
                         {gridSteps.map((step, idx) => {
-                          const val = yMax * step;
+                          const val = yMin + yRange * step;
                           const y = padTop + plotH - step * plotH;
                           return (
                             <g key={idx}>
@@ -861,28 +938,47 @@ export default function VernierIoTPage() {
                                 y1={y}
                                 x2={width - padRight}
                                 y2={y}
-                                stroke="#1e293b"
+                                stroke="#334155"
                                 strokeDasharray="3 3"
                                 strokeWidth="1"
                               />
                               <text
-                                x={padLeft - 6}
+                                x={padLeft - 8}
                                 y={y + 3.5}
                                 textAnchor="end"
-                                fill="#64748b"
-                                fontSize="10"
+                                fill="#94a3b8"
+                                fontSize="11"
+                                fontWeight="bold"
                                 fontFamily="monospace"
                               >
-                                {val.toFixed(0)}
+                                {val.toFixed(1)}
                               </text>
                             </g>
                           );
                         })}
 
-                        {/* Unit label */}
-                        <text x={padLeft} y={11} fill="#64748b" fontSize="9" fontFamily="monospace">
-                          ({exp.defaultUnit})
+                        {/* Unit label at top left */}
+                        <text x={padLeft} y={13} fill="#cbd5e1" fontSize="10" fontWeight="bold" fontFamily="monospace">
+                          Trục tung: ({exp.defaultUnit})
                         </text>
+
+                        {/* X-axis time marks */}
+                        {timeMarkers.map((tm, idx) => {
+                          const x = padLeft + (idx / (timeMarkers.length - 1)) * plotW;
+                          return (
+                            <text
+                              key={idx}
+                              x={x}
+                              y={height - 8}
+                              textAnchor={idx === 0 ? "start" : idx === timeMarkers.length - 1 ? "end" : "middle"}
+                              fill="#64748b"
+                              fontSize="9.5"
+                              fontFamily="monospace"
+                            >
+                              {tm}
+                            </text>
+                          );
+                        })}
 
                         {/* Area gradient under measured line */}
                         <path d={areaFill} fill="url(#sensorGrad)" />
@@ -892,18 +988,20 @@ export default function VernierIoTPage() {
                           d={theoryLine}
                           fill="none"
                           stroke="#38bdf8"
-                          strokeWidth="2"
+                          strokeWidth="2.5"
                           strokeDasharray="6 4"
+                          opacity="0.9"
                         />
 
-                        {/* Measured solid curve (Amber) */}
+                        {/* Measured solid curve (Bright Amber) with slight glow */}
                         <path
                           d={measuredLine}
                           fill="none"
-                          stroke="#f59e0b"
-                          strokeWidth="2.5"
+                          stroke="#fbbf24"
+                          strokeWidth="3"
                           strokeLinecap="round"
                           strokeLinejoin="round"
+                          filter="url(#glow)"
                         />
 
                         {/* Measured data dots */}
@@ -912,25 +1010,60 @@ export default function VernierIoTPage() {
                             key={i}
                             cx={p.x}
                             cy={p.y}
-                            r={i === measuredPoints.length - 1 ? 4 : 2}
-                            fill="#f59e0b"
+                            r={i === measuredPoints.length - 1 ? 5 : 2.5}
+                            fill="#fbbf24"
                             stroke="#0f172a"
-                            strokeWidth="1"
+                            strokeWidth="1.5"
                           />
                         ))}
 
-                        {/* Active ping animation at the current live point */}
+                        {/* Horizontal guide cursor to current live point */}
                         {lastPt && (
-                          <circle
-                            cx={lastPt.x}
-                            cy={lastPt.y}
-                            r="7"
-                            fill="none"
-                            stroke="#fbbf24"
-                            strokeWidth="1.5"
-                            className="animate-ping"
-                            opacity="0.8"
-                          />
+                          <g>
+                            <line
+                              x1={padLeft}
+                              y1={lastPt.y}
+                              x2={lastPt.x}
+                              y2={lastPt.y}
+                              stroke="#fbbf24"
+                              strokeWidth="1"
+                              strokeDasharray="2 2"
+                              opacity="0.85"
+                            />
+                            {/* Live Floating Badge right above the latest point */}
+                            <g transform={`translate(${Math.max(padLeft, Math.min(width - padRight - 85, lastPt.x - 42))}, ${Math.max(16, lastPt.y - 28)})`}>
+                              <rect
+                                width="84"
+                                height="22"
+                                rx="6"
+                                fill="#fbbf24"
+                                className="shadow-lg"
+                              />
+                              <text
+                                x="42"
+                                y="15"
+                                textAnchor="middle"
+                                fill="#0f172a"
+                                fontSize="11"
+                                fontWeight="900"
+                                fontFamily="monospace"
+                              >
+                                {lastPt.val.toFixed(2)} {exp.defaultUnit}
+                              </text>
+                            </g>
+
+                            {/* Active pulse animation at live tip */}
+                            <circle
+                              cx={lastPt.x}
+                              cy={lastPt.y}
+                              r="8"
+                              fill="none"
+                              stroke="#fbbf24"
+                              strokeWidth="2"
+                              className="animate-ping"
+                              opacity="0.9"
+                            />
+                          </g>
                         )}
                       </svg>
                     );
@@ -938,7 +1071,7 @@ export default function VernierIoTPage() {
                 </div>
               ) : (
                 /* Bar trace stream (Dạng cột cũ) */
-                <div className="h-52 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 p-2.5 flex items-end gap-1.5 overflow-hidden shadow-inner">
+                <div className="h-64 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 p-2.5 flex items-end gap-1.5 overflow-hidden shadow-inner">
                   {telemetryList.length === 0 ? (
                     <div className="w-full h-full flex items-center justify-center text-xs text-slate-400 font-mono">
                       Đang đợi xung tín hiệu từ cảm biến...
