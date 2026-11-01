@@ -60,33 +60,130 @@ const EXPERIMENTS: Record<ExperimentType, ExperimentConfig> = {
   sound: {
     id: "sound",
     grade: "KHTN 7",
-    title: "Khảo Sát Sóng Âm & Biên Độ Âm Thanh Trong Ống Kundt",
-    sensorName: "Cảm biến Âm thanh (Microphone / Vernier Sound)",
+    title: "Khảo Sát Độ To, Biên Độ & Sóng Âm Thanh",
+    sensorName: "Cảm biến Âm thanh Analog (KY-037 / MAX4466)",
     defaultUnit: "dB",
     sampleRate: "50.0 kHz",
     baudRate: 115200,
-    theoryFormula: "L = (2k + 1) \\frac{\\lambda}{4}; \\quad I_{dB} = 60 + 35|\\sin(kx)|",
+    theoryFormula: "L = 20 \\lg\\left(\\frac{V_{pp}}{V_0}\\right); \\quad V_{pp} = V_{max} - V_{min}",
     calcTheory: (pos) => {
       // Standing wave in pipe: frequency = 1000Hz, v = 344 m/s -> lambda = 34.4 cm
       const k = (2 * Math.PI) / 34.4;
       const amp = Math.abs(Math.sin(k * pos));
-      return 60 + amp * 35;
+      return 50 + amp * 40;
     },
-    paramName: "Vị trí đầu dò (x)",
+    paramName: "Vị trí nguồn âm / đầu dò (x)",
     paramUnit: "cm",
     paramMin: 0,
     paramMax: 68,
     paramDefault: 34,
-    arduinoCode: `// Arduino Uno / Nano + Cảm biến Âm thanh Analog (Chân A0)
+    arduinoCode: `// ================================================================
+// HỘP THÍ NGHIỆM KHTN 7: KHẢO SÁT SÓNG ÂM & BIÊN ĐỘ ÂM THANH
+// Vi điều khiển: ESP32 (Type-C WROOM-32)
+// Cảm biến âm thanh: KY-037 / MAX4466 (Nối AO -> GPIO 35)
+// Màn hình hiển thị: OLED 0.96 inch SSD1306 (I2C: SDA=21, SCL=22)
+// 2 Nút nhấn điều khiển: Nút 1 (GPIO 18), Nút 2 (GPIO 19)
+// ================================================================
+
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+const int MIC_PIN   = 35; // Chân Analog đọc mic (GPIO 35)
+const int BTN_START = 18; // Nút 1: Bắt đầu / Tạm dừng
+const int BTN_RESET = 19; // Nút 2: Đặt lại
+
+const int SAMPLE_WINDOW = 50; // Cửa sổ lấy mẫu 50ms để bắt đỉnh sóng âm
+bool isRunning = true;
+
 void setup() {
   Serial.begin(115200);
+
+  pinMode(BTN_START, INPUT_PULLUP);
+  pinMode(BTN_RESET, INPUT_PULLUP);
+  analogReadResolution(12); // ESP32 12-bit ADC (0 - 4095)
+
+  Wire.begin(21, 22);
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("Khong tim thay OLED!"));
+  }
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(10, 25);
+  display.println(F("KHTN 7: AM THANH"));
+  display.display();
+  delay(1000);
 }
+
 void loop() {
-  int sensorValue = analogRead(A0);
-  // Quy đổi điện áp sang mức cường độ âm thanh dB (ước lượng 50 - 100 dB)
-  float soundDb = map(sensorValue, 0, 1023, 500, 1000) / 10.0;
-  Serial.println(soundDb);
-  delay(100);
+  // 1. Đọc nút nhấn điều khiển
+  if (digitalRead(BTN_START) == LOW) {
+    delay(50);
+    if (digitalRead(BTN_START) == LOW) {
+      isRunning = !isRunning;
+      while (digitalRead(BTN_START) == LOW) delay(10);
+    }
+  }
+  if (digitalRead(BTN_RESET) == LOW) {
+    delay(50);
+    if (digitalRead(BTN_RESET) == LOW) {
+      isRunning = true;
+      while (digitalRead(BTN_RESET) == LOW) delay(10);
+    }
+  }
+
+  // 2. Thuật toán lấy mẫu tìm biên độ đỉnh - đỉnh (Peak-to-Peak)
+  unsigned long startMillis = millis();
+  unsigned int signalMax = 0;
+  unsigned int signalMin = 4095;
+
+  while (millis() - startMillis < SAMPLE_WINDOW) {
+    unsigned int sample = analogRead(MIC_PIN);
+    if (sample > signalMax) signalMax = sample;
+    if (sample < signalMin) signalMin = sample;
+  }
+
+  // Tính biên độ sóng âm Vpp (Volt)
+  unsigned int peakToPeak = signalMax - signalMin;
+  float volts = (peakToPeak * 3.3) / 4095.0;
+
+  // Quy đổi độ to của âm ra đơn vị Decibel (dB) ước tính (45 - 100 dB)
+  float soundDb = 45.0 + (volts * 28.0);
+  if (soundDb > 110.0) soundDb = 110.0;
+  if (soundDb < 45.0)  soundDb = 45.0;
+
+  // 3. Gửi dữ liệu lên web PhysiX qua cổng USB Serial nếu đang chạy
+  if (isRunning) {
+    Serial.println(soundDb, 2);
+  }
+
+  // 4. Hiển thị trên màn hình OLED SSD1306
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.print(F("KHTN7: BIEN DO AM"));
+
+  display.setCursor(0, 16);
+  display.setTextSize(2);
+  display.printf("%.1f dB", soundDb);
+
+  display.setTextSize(1);
+  display.setCursor(0, 38);
+  display.printf("Vpp: %.2fV | %s", volts, isRunning ? "RUN" : "PAUSE");
+
+  // Thanh VU-meter trực quan theo độ to của âm
+  display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
+  int barWidth = map((int)soundDb, 45, 95, 0, 124);
+  if (barWidth > 124) barWidth = 124;
+  if (barWidth < 0) barWidth = 0;
+  display.fillRect(2, 54, barWidth, 7, SSD1306_WHITE);
+
+  display.display();
 }`
   },
   ultrasonic: {
