@@ -263,7 +263,7 @@ export default function VernierIoTPage() {
   const [paramValue, setParamValue] = useState<number>(exp.paramDefault);
   const [telemetryList, setTelemetryList] = useState<TelemetryPoint[]>([]);
   const [chartMode, setChartMode] = useState<"line" | "bar">("line");
-  const [zoomFocus, setZoomFocus] = useState<boolean>(false);
+  const [zoomFocus, setZoomFocus] = useState<boolean>(true);
 
   // Hardware connection states
   const [connectionType, setConnectionType] = useState<"none" | "serial" | "bluetooth" | "simulator">("simulator");
@@ -852,9 +852,9 @@ export default function VernierIoTPage() {
 
               {/* Chart container */}
               {chartMode === "line" ? (
-                <div className="h-64 bg-slate-950 rounded-xl border border-slate-800 p-2 overflow-hidden shadow-inner flex flex-col justify-between">
+                <div className="h-72 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 overflow-hidden shadow-xs flex flex-col justify-between">
                   {telemetryList.length === 0 ? (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-500 font-mono">
+                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-400 font-mono">
                       Đang đợi xung tín hiệu từ cảm biến...
                     </div>
                   ) : (() => {
@@ -862,24 +862,33 @@ export default function VernierIoTPage() {
                     const vals = telemetryList.map((p) => p.measured);
                     const minMeas = Math.min(...vals, theoryValue);
                     const maxMeas = Math.max(...vals, theoryValue);
-                    const spread = Math.max(0.8, maxMeas - minMeas);
+                    const spread = Math.max(0.6, maxMeas - minMeas);
 
                     let yMin = 0;
-                    let yMax = Math.ceil(Math.max(1, theoryValue * 1.25, maxMeas) * 1.15) || 10;
+                    let yMax = 10;
 
                     if (zoomFocus) {
-                      // Zoom in tight around the data fluctuations
-                      yMin = Math.max(0, parseFloat((minMeas - spread * 0.35).toFixed(1)));
-                      yMax = parseFloat((maxMeas + spread * 0.35).toFixed(1));
-                      if (yMax <= yMin) yMax = yMin + 5;
+                      // Tự động phóng đại ôm sát dải biến thiên để nhìn rõ từng gợn sóng nhỏ
+                      const pad = Math.max(0.6, spread * 0.45);
+                      yMin = Math.max(0, parseFloat((minMeas - pad).toFixed(1)));
+                      yMax = parseFloat((maxMeas + pad).toFixed(1));
+                      if (yMax - yMin < 2.0) {
+                        const mid = (yMax + yMin) / 2;
+                        yMin = Math.max(0, parseFloat((mid - 1.2).toFixed(1)));
+                        yMax = parseFloat((mid + 1.2).toFixed(1));
+                      }
+                    } else {
+                      // Toàn dải 0 đến cực đại
+                      yMin = 0;
+                      yMax = Math.ceil(Math.max(1, theoryValue * 1.25, maxMeas) * 1.15) || 10;
                     }
 
                     const yRange = Math.max(0.1, yMax - yMin);
                     const width = 800;
-                    const height = 230;
-                    const padLeft = 52;
+                    const height = 245;
+                    const padLeft = 56;
                     const padRight = 25;
-                    const padTop = 22;
+                    const padTop = 24;
                     const padBottom = 26;
                     const plotW = width - padLeft - padRight;
                     const plotH = height - padTop - padBottom;
@@ -917,15 +926,22 @@ export default function VernierIoTPage() {
                     return (
                       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full select-none">
                         <defs>
-                          <linearGradient id="sensorGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.45" />
-                            <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" />
+                          <linearGradient id="sensorGradLight" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#ea580c" stopOpacity="0.18" />
+                            <stop offset="100%" stopColor="#ea580c" stopOpacity="0.0" />
                           </linearGradient>
-                          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feGaussianBlur stdDeviation="3" result="blur" />
-                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                          </filter>
                         </defs>
+
+                        {/* Nền đồ thị chuẩn phòng thí nghiệm */}
+                        <rect
+                          x={padLeft}
+                          y={padTop}
+                          width={plotW}
+                          height={plotH}
+                          fill="#f8fafc"
+                          className="dark:fill-slate-950/40"
+                          rx="6"
+                        />
 
                         {/* Grid lines and Y labels */}
                         {gridSteps.map((step, idx) => {
@@ -938,7 +954,8 @@ export default function VernierIoTPage() {
                                 y1={y}
                                 x2={width - padRight}
                                 y2={y}
-                                stroke="#334155"
+                                stroke="#e2e8f0"
+                                className="dark:stroke-slate-800"
                                 strokeDasharray="3 3"
                                 strokeWidth="1"
                               />
@@ -946,7 +963,8 @@ export default function VernierIoTPage() {
                                 x={padLeft - 8}
                                 y={y + 3.5}
                                 textAnchor="end"
-                                fill="#94a3b8"
+                                fill="#475569"
+                                className="dark:fill-slate-400"
                                 fontSize="11"
                                 fontWeight="bold"
                                 fontFamily="monospace"
@@ -958,8 +976,15 @@ export default function VernierIoTPage() {
                         })}
 
                         {/* Unit label at top left */}
-                        <text x={padLeft} y={13} fill="#cbd5e1" fontSize="10" fontWeight="bold" fontFamily="monospace">
-                          Trục tung: ({exp.defaultUnit})
+                        <text
+                          x={padLeft + 4}
+                          y={14}
+                          fill="#0284c7"
+                          fontSize="10"
+                          fontWeight="bold"
+                          fontFamily="sans-serif"
+                        >
+                          Trục tung: ({exp.defaultUnit}) {zoomFocus ? "• Phóng đại biến thiên" : "• Toàn dải"}
                         </text>
 
                         {/* X-axis time marks */}
@@ -972,8 +997,9 @@ export default function VernierIoTPage() {
                               y={height - 8}
                               textAnchor={idx === 0 ? "start" : idx === timeMarkers.length - 1 ? "end" : "middle"}
                               fill="#64748b"
-                              fontSize="9.5"
+                              fontSize="10"
                               fontFamily="monospace"
+                              fontWeight="600"
                             >
                               {tm}
                             </text>
@@ -981,39 +1007,38 @@ export default function VernierIoTPage() {
                         })}
 
                         {/* Area gradient under measured line */}
-                        <path d={areaFill} fill="url(#sensorGrad)" />
+                        <path d={areaFill} fill="url(#sensorGradLight)" />
 
                         {/* Theory dashed curve (Sky blue) */}
                         <path
                           d={theoryLine}
                           fill="none"
-                          stroke="#38bdf8"
+                          stroke="#0284c7"
                           strokeWidth="2.5"
                           strokeDasharray="6 4"
                           opacity="0.9"
                         />
 
-                        {/* Measured solid curve (Bright Amber) with slight glow */}
+                        {/* Measured solid curve (Cam đậm sắc nét trên nền sáng) */}
                         <path
                           d={measuredLine}
                           fill="none"
-                          stroke="#fbbf24"
-                          strokeWidth="3"
+                          stroke="#ea580c"
+                          strokeWidth="3.2"
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          filter="url(#glow)"
                         />
 
-                        {/* Measured data dots */}
+                        {/* Measured data dots with white outline */}
                         {measuredPoints.map((p, i) => (
                           <circle
                             key={i}
                             cx={p.x}
                             cy={p.y}
-                            r={i === measuredPoints.length - 1 ? 5 : 2.5}
-                            fill="#fbbf24"
-                            stroke="#0f172a"
-                            strokeWidth="1.5"
+                            r={i === measuredPoints.length - 1 ? 5.5 : 3}
+                            fill="#ea580c"
+                            stroke="#ffffff"
+                            strokeWidth="2"
                           />
                         ))}
 
@@ -1025,25 +1050,26 @@ export default function VernierIoTPage() {
                               y1={lastPt.y}
                               x2={lastPt.x}
                               y2={lastPt.y}
-                              stroke="#fbbf24"
-                              strokeWidth="1"
+                              stroke="#ea580c"
+                              strokeWidth="1.2"
                               strokeDasharray="2 2"
-                              opacity="0.85"
+                              opacity="0.75"
                             />
+
                             {/* Live Floating Badge right above the latest point */}
-                            <g transform={`translate(${Math.max(padLeft, Math.min(width - padRight - 85, lastPt.x - 42))}, ${Math.max(16, lastPt.y - 28)})`}>
+                            <g transform={`translate(${Math.max(padLeft, Math.min(width - padRight - 90, lastPt.x - 45))}, ${Math.max(12, lastPt.y - 28)})`}>
                               <rect
-                                width="84"
-                                height="22"
+                                width="90"
+                                height="23"
                                 rx="6"
-                                fill="#fbbf24"
-                                className="shadow-lg"
+                                fill="#ea580c"
+                                className="shadow-md"
                               />
                               <text
-                                x="42"
-                                y="15"
+                                x="45"
+                                y="15.5"
                                 textAnchor="middle"
-                                fill="#0f172a"
+                                fill="#ffffff"
                                 fontSize="11"
                                 fontWeight="900"
                                 fontFamily="monospace"
@@ -1056,12 +1082,12 @@ export default function VernierIoTPage() {
                             <circle
                               cx={lastPt.x}
                               cy={lastPt.y}
-                              r="8"
+                              r="9"
                               fill="none"
-                              stroke="#fbbf24"
+                              stroke="#ea580c"
                               strokeWidth="2"
                               className="animate-ping"
-                              opacity="0.9"
+                              opacity="0.8"
                             />
                           </g>
                         )}
@@ -1070,8 +1096,8 @@ export default function VernierIoTPage() {
                   })()}
                 </div>
               ) : (
-                /* Bar trace stream (Dạng cột cũ) */
-                <div className="h-64 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 p-2.5 flex items-end gap-1.5 overflow-hidden shadow-inner">
+                /* Bar trace stream (Dạng cột cũ trên nền sáng) */
+                <div className="h-72 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 flex items-end gap-1.5 overflow-hidden shadow-inner">
                   {telemetryList.length === 0 ? (
                     <div className="w-full h-full flex items-center justify-center text-xs text-slate-400 font-mono">
                       Đang đợi xung tín hiệu từ cảm biến...
