@@ -259,7 +259,7 @@ export default function VernierIoTPage() {
   const [activeExp, setActiveExp] = useState<ExperimentType>("sound");
   const exp = EXPERIMENTS[activeExp];
 
-  const [isRecording, setIsRecording] = useState<boolean>(true);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
   const [paramValue, setParamValue] = useState<number>(exp.paramDefault);
   const [telemetryList, setTelemetryList] = useState<TelemetryPoint[]>([]);
   const [chartMode, setChartMode] = useState<"line" | "bar">("line");
@@ -268,7 +268,7 @@ export default function VernierIoTPage() {
   // Hardware connection states
   const [connectionType, setConnectionType] = useState<"none" | "serial" | "bluetooth" | "simulator">("simulator");
   const [connectionStatus, setConnectionStatus] = useState<"disconnected" | "connecting" | "connected">("connected");
-  const [statusMsg, setStatusMsg] = useState<string>("Đang chạy bộ giả lập phần cứng ảo chuẩn thực nghiệm (độ trễ 2.4ms)");
+  const [statusMsg, setStatusMsg] = useState<string>("Hệ thống sẵn sàng. Nhấn '▶ Bắt đầu thí nghiệm' hoặc cắm cáp USB Serial để tiến hành.");
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [showCodeModal, setShowCodeModal] = useState<boolean>(false);
 
@@ -284,6 +284,7 @@ export default function VernierIoTPage() {
   useEffect(() => {
     setParamValue(exp.paramDefault);
     setTelemetryList([]);
+    setIsRecording(false);
   }, [activeExp]);
 
   // Simulation Loop when in "simulator" mode
@@ -333,6 +334,7 @@ export default function VernierIoTPage() {
       keepReadingRef.current = true;
       setConnectionType("serial");
       setConnectionStatus("connected");
+      setIsRecording(true);
       setStatusMsg(`Đã kết nối trực tiếp cổng USB Serial (${exp.baudRate} bps)! Đang nhận luồng xung...`);
 
       // Start reading stream
@@ -607,20 +609,35 @@ export default function VernierIoTPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setIsRecording(!isRecording)}
-                    className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    onClick={() => {
+                      const next = !isRecording;
+                      setIsRecording(next);
+                      if (next && connectionType === "none") {
+                        setConnectionType("simulator");
+                      }
+                      if (next) {
+                        setStatusMsg(connectionType === "serial" ? "Đang ghi nhận dữ liệu từ cảm biến thật..." : "Đang chạy mô phỏng thực nghiệm...");
+                      } else {
+                        setStatusMsg("Đã tạm dừng thí nghiệm. Bấm 'Tiếp tục' để ghi tiếp.");
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
                       isRecording
-                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                        : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        ? "bg-amber-500 hover:bg-amber-600 text-white"
+                        : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
                     }`}
                   >
-                    {isRecording ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                    <span>{isRecording ? "Đang thu thập số liệu" : "Tạm dừng"}</span>
+                    {isRecording ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                    <span>{isRecording ? "Tạm dừng thí nghiệm" : "▶ Bắt đầu thí nghiệm"}</span>
                   </button>
                   <button
-                    onClick={() => setTelemetryList([])}
-                    className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
-                    title="Xóa bảng số liệu"
+                    onClick={() => {
+                      setTelemetryList([]);
+                      setIsRecording(false);
+                      setStatusMsg("Đã đặt lại đồ thị về trạng thái ban đầu.");
+                    }}
+                    className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700"
+                    title="Đặt lại đồ thị"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                   </button>
@@ -854,8 +871,11 @@ export default function VernierIoTPage() {
               {chartMode === "line" ? (
                 <div className="h-72 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 overflow-hidden shadow-xs flex flex-col justify-between">
                   {telemetryList.length === 0 ? (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-400 font-mono">
-                      Đang đợi xung tín hiệu từ cảm biến...
+                    <div className="w-full h-full flex flex-col items-center justify-center text-xs text-slate-500 font-mono gap-2">
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                        <Play className="w-4 h-4 fill-current ml-0.5" />
+                      </div>
+                      <span>Hệ thống sẵn sàng! Bấm <strong>&quot;▶ Bắt đầu thí nghiệm&quot;</strong> hoặc cắm cáp USB Serial để vẽ đồ thị.</span>
                     </div>
                   ) : (() => {
                     const N = telemetryList.length;
@@ -1099,8 +1119,11 @@ export default function VernierIoTPage() {
                 /* Bar trace stream (Dạng cột cũ trên nền sáng) */
                 <div className="h-72 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 flex items-end gap-1.5 overflow-hidden shadow-inner">
                   {telemetryList.length === 0 ? (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-400 font-mono">
-                      Đang đợi xung tín hiệu từ cảm biến...
+                    <div className="w-full h-full flex flex-col items-center justify-center text-xs text-slate-500 font-mono gap-2">
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                        <Play className="w-4 h-4 fill-current ml-0.5" />
+                      </div>
+                      <span>Hệ thống sẵn sàng! Bấm <strong>&quot;▶ Bắt đầu thí nghiệm&quot;</strong> hoặc cắm cáp USB Serial để vẽ đồ thị.</span>
                     </div>
                   ) : (
                     telemetryList.map((pt, i) => {
