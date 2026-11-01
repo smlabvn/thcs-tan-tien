@@ -259,6 +259,7 @@ export default function VernierIoTPage() {
   const [activeExp, setActiveExp] = useState<ExperimentType>("sound");
   const exp = EXPERIMENTS[activeExp];
 
+  const [expMode, setExpMode] = useState<"hardware" | "simulator">("hardware");
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [paramValue, setParamValue] = useState<number>(exp.paramDefault);
   const [telemetryList, setTelemetryList] = useState<TelemetryPoint[]>([]);
@@ -266,9 +267,9 @@ export default function VernierIoTPage() {
   const [zoomFocus, setZoomFocus] = useState<boolean>(true);
 
   // Hardware connection states
-  const [connectionType, setConnectionType] = useState<"none" | "serial" | "bluetooth" | "simulator">("simulator");
-  const [connectionStatus, setConnectionStatus] = useState<"disconnected" | "connecting" | "connected">("connected");
-  const [statusMsg, setStatusMsg] = useState<string>("Hệ thống sẵn sàng. Nhấn '▶ Bắt đầu thí nghiệm' hoặc cắm cáp USB Serial để tiến hành.");
+  const [connectionType, setConnectionType] = useState<"none" | "serial" | "bluetooth" | "simulator">("none");
+  const [connectionStatus, setConnectionStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
+  const [statusMsg, setStatusMsg] = useState<string>("Chế độ 1: Cảm biến phần cứng thật. Hãy cắm cáp USB và bấm 'Cắm USB Serial' để đọc dữ liệu ESP32.");
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [showCodeModal, setShowCodeModal] = useState<boolean>(false);
 
@@ -289,7 +290,7 @@ export default function VernierIoTPage() {
 
   // Simulation Loop when in "simulator" mode
   useEffect(() => {
-    if (connectionType !== "simulator" || !isRecording) return;
+    if (expMode !== "simulator" || connectionType !== "simulator" || !isRecording) return;
 
     let t = 0;
     const interval = setInterval(() => {
@@ -313,7 +314,7 @@ export default function VernierIoTPage() {
     }, 150);
 
     return () => clearInterval(interval);
-  }, [connectionType, isRecording, theoryValue]);
+  }, [expMode, connectionType, isRecording, theoryValue]);
 
   // Web Serial API handler
   const handleConnectSerial = async () => {
@@ -332,10 +333,11 @@ export default function VernierIoTPage() {
 
       serialPortRef.current = port;
       keepReadingRef.current = true;
+      setExpMode("hardware");
       setConnectionType("serial");
       setConnectionStatus("connected");
       setIsRecording(true);
-      setStatusMsg(`Đã kết nối trực tiếp cổng USB Serial (${exp.baudRate} bps)! Đang nhận luồng xung...`);
+      setStatusMsg(`Đã kết nối trực tiếp cổng USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu...`);
 
       // Start reading stream
       // @ts-ignore
@@ -401,8 +403,10 @@ export default function VernierIoTPage() {
         optionalServices: ["battery_service"],
       });
 
+      setExpMode("hardware");
       setConnectionType("bluetooth");
       setConnectionStatus("connected");
+      setIsRecording(true);
       setStatusMsg(`Đã kết nối Bluetooth không dây với ${device.name || "Thiết bị BLE KHTN"}`);
     } catch (err: any) {
       setConnectionStatus("disconnected");
@@ -425,9 +429,16 @@ export default function VernierIoTPage() {
     }
     serialPortRef.current = null;
     serialReaderRef.current = null;
-    setConnectionType("simulator");
-    setConnectionStatus("connected");
-    setStatusMsg("Đã chuyển về Bộ giả lập phần cứng ảo (độ trễ 2.4ms, sai số Gaussian)");
+    setIsRecording(false);
+    if (expMode === "hardware") {
+      setConnectionType("none");
+      setConnectionStatus("disconnected");
+      setStatusMsg("Đã ngắt kết nối USB. Hãy bấm 'Cắm USB Serial' khi muốn kết nối lại.");
+    } else {
+      setConnectionType("simulator");
+      setConnectionStatus("connected");
+      setStatusMsg("Đã chuyển về Bộ giả lập phần cứng ảo.");
+    }
   };
 
   // Export CSV Data
@@ -476,35 +487,37 @@ export default function VernierIoTPage() {
               </h1>
             </div>
 
-            {/* Hardware Connect Buttons */}
+            {/* Action Buttons in Header */}
             <div className="flex items-center gap-2 flex-wrap">
-              {connectionType !== "simulator" ? (
-                <button
-                  onClick={handleDisconnect}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold transition-all"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Ngắt kết nối ({connectionType.toUpperCase()})</span>
-                </button>
-              ) : (
-                <>
+              {expMode === "hardware" && (
+                connectionType === "serial" || connectionType === "bluetooth" ? (
                   <button
-                    onClick={handleConnectSerial}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-sm transition-all"
-                    title="Cắm cáp USB Arduino / ESP32 / micro:bit vào máy tính"
+                    onClick={handleDisconnect}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold transition-all"
                   >
-                    <Usb className="w-4 h-4" />
-                    <span>Cắm USB Serial (Arduino)</span>
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Ngắt kết nối ({connectionType.toUpperCase()})</span>
                   </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleConnectSerial}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-sm transition-all"
+                      title="Cắm cáp USB Arduino / ESP32 vào máy tính"
+                    >
+                      <Usb className="w-4 h-4" />
+                      <span>Cắm USB Serial (ESP32)</span>
+                    </button>
 
-                  <button
-                    onClick={handleConnectBluetooth}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all"
-                  >
-                    <Bluetooth className="w-4 h-4" />
-                    <span>Bluetooth (BLE)</span>
-                  </button>
-                </>
+                    <button
+                      onClick={handleConnectBluetooth}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all"
+                    >
+                      <Bluetooth className="w-4 h-4" />
+                      <span>Bluetooth (BLE)</span>
+                    </button>
+                  </>
+                )
               )}
 
               <button
@@ -523,6 +536,76 @@ export default function VernierIoTPage() {
                 <span>Xuất CSV</span>
               </button>
             </div>
+          </div>
+
+          {/* 2 Nút Chọn Chế Độ Thí Nghiệm (Hardware vs Simulator) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => {
+                setExpMode("hardware");
+                if (connectionType === "simulator") {
+                  setConnectionType("none");
+                  setIsRecording(false);
+                  setTelemetryList([]);
+                }
+                setStatusMsg("Chế độ 1: Cảm biến Phần cứng thật. Vui lòng cắm cáp USB Serial kết nối ESP32.");
+              }}
+              className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold text-left transition-all ${
+                expMode === "hardware"
+                  ? "bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-md ring-2 ring-sky-500/20"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50"
+              }`}
+            >
+              <div className={`p-2.5 rounded-xl shrink-0 ${expMode === "hardware" ? "bg-sky-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-500"}`}>
+                <Usb className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-extrabold flex items-center gap-2">
+                  <span>Chế Độ 1: Cảm Biến Phần Cứng Thật</span>
+                  {connectionType === "serial" && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-700 font-bold">
+                      ● Đang kết nối USB
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] font-normal text-slate-500 dark:text-slate-400 truncate">
+                  Đo trực tiếp từ cảm biến INA219, HC-SR04, Mic qua ESP32 USB Serial
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                setExpMode("simulator");
+                if (connectionType === "serial" || connectionType === "bluetooth") {
+                  handleDisconnect();
+                }
+                setConnectionType("simulator");
+                setStatusMsg("Chế độ 2: Mô phỏng Thực nghiệm ảo. Bấm '▶ Bắt đầu mô phỏng' để tiến hành.");
+              }}
+              className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold text-left transition-all ${
+                expMode === "simulator"
+                  ? "bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-md ring-2 ring-purple-500/20"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50"
+              }`}
+            >
+              <div className={`p-2.5 rounded-xl shrink-0 ${expMode === "simulator" ? "bg-purple-600 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-500"}`}>
+                <Zap className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-extrabold flex items-center gap-2">
+                  <span>Chế Độ 2: Mô Phỏng Thực Nghiệm Ảo</span>
+                  {expMode === "simulator" && isRecording && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-100 text-purple-700 font-bold">
+                      ● Đang chạy mô phỏng
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] font-normal text-slate-500 dark:text-slate-400 truncate">
+                  Digital Twin cho học sinh thực hành lý thuyết &amp; kéo thanh trượt trực tuyến
+                </div>
+              </div>
+            </button>
           </div>
 
           {/* Module Selector Tabs */}
@@ -574,9 +657,17 @@ export default function VernierIoTPage() {
                     ? "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300"
                     : connectionType === "bluetooth"
                     ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
+                    : expMode === "simulator"
+                    ? "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"
                     : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                 }`}>
-                  {connectionType === "serial" ? "USB SERIAL 115200" : connectionType === "bluetooth" ? "BLE 5.2" : "VIRTUAL HARDWARE EMULATOR"}
+                  {connectionType === "serial"
+                    ? "USB SERIAL 115200"
+                    : connectionType === "bluetooth"
+                    ? "BLE 5.2"
+                    : expMode === "simulator"
+                    ? "MÔ PHỎNG SỐ (DIGITAL TWIN)"
+                    : "CHỜ KẾT NỐI PHẦN CỨNG"}
                 </span>
               </div>
               <div className="text-slate-500 dark:text-slate-400">
@@ -605,31 +696,71 @@ export default function VernierIoTPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 font-bold text-xs">
                   <Activity className="w-4 h-4 text-sky-600" />
-                  <span>MÔ PHỎNG HỆ THỐNG THÍ NGHIỆM ĐỒNG BỘ CẢM BIẾN</span>
+                  <span>
+                    {expMode === "hardware"
+                      ? "GIÁM SÁT THỰC NGHIỆM PHẦN CỨNG THẬT (ESP32)"
+                      : "MÔ PHỎNG HỆ THỐNG THÍ NGHIỆM ĐỒNG BỘ CẢM BIẾN"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const next = !isRecording;
-                      setIsRecording(next);
-                      if (next && connectionType === "none") {
-                        setConnectionType("simulator");
-                      }
-                      if (next) {
-                        setStatusMsg(connectionType === "serial" ? "Đang ghi nhận dữ liệu từ cảm biến thật..." : "Đang chạy mô phỏng thực nghiệm...");
-                      } else {
-                        setStatusMsg("Đã tạm dừng thí nghiệm. Bấm 'Tiếp tục' để ghi tiếp.");
-                      }
-                    }}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
-                      isRecording
-                        ? "bg-amber-500 hover:bg-amber-600 text-white"
-                        : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                    }`}
-                  >
-                    {isRecording ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                    <span>{isRecording ? "Tạm dừng thí nghiệm" : "▶ Bắt đầu thí nghiệm"}</span>
-                  </button>
+                  {expMode === "hardware" ? (
+                    connectionType === "serial" || connectionType === "bluetooth" ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            const next = !isRecording;
+                            setIsRecording(next);
+                            setStatusMsg(next ? "Đang tiếp tục thu thập từ cảm biến thật..." : "Đã tạm dừng vẽ đồ thị.");
+                          }}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                            isRecording
+                              ? "bg-amber-500 hover:bg-amber-600 text-white"
+                              : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                          }`}
+                        >
+                          {isRecording ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                          <span>{isRecording ? "Tạm dừng" : "Tiếp tục"}</span>
+                        </button>
+                        <button
+                          onClick={handleDisconnect}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold transition-all"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Ngắt kết nối</span>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={handleConnectSerial}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-sm transition-all"
+                      >
+                        <Usb className="w-3.5 h-3.5" />
+                        <span>🔌 Cắm USB Serial</span>
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const next = !isRecording;
+                        setIsRecording(next);
+                        if (next) {
+                          setConnectionType("simulator");
+                          setStatusMsg("Đang chạy mô phỏng thực nghiệm ảo...");
+                        } else {
+                          setStatusMsg("Đã tạm dừng mô phỏng. Bấm 'Tiếp tục' để mô phỏng tiếp.");
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                        isRecording
+                          ? "bg-amber-500 hover:bg-amber-600 text-white"
+                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                      }`}
+                    >
+                      {isRecording ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                      <span>{isRecording ? "Tạm dừng mô phỏng" : "▶ Bắt đầu mô phỏng"}</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
                       setTelemetryList([]);
@@ -871,11 +1002,51 @@ export default function VernierIoTPage() {
               {chartMode === "line" ? (
                 <div className="h-72 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 overflow-hidden shadow-xs flex flex-col justify-between">
                   {telemetryList.length === 0 ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-xs text-slate-500 font-mono gap-2">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                        <Play className="w-4 h-4 fill-current ml-0.5" />
+                    <div className="w-full h-full flex flex-col items-center justify-center text-xs text-slate-500 font-mono gap-2 p-4 text-center">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        expMode === "hardware" ? "bg-sky-100 text-sky-600" : "bg-purple-100 text-purple-600"
+                      }`}>
+                        {expMode === "hardware" ? <Usb className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
                       </div>
-                      <span>Hệ thống sẵn sàng! Bấm <strong>&quot;▶ Bắt đầu thí nghiệm&quot;</strong> hoặc cắm cáp USB Serial để vẽ đồ thị.</span>
+                      <div className="max-w-md">
+                        {expMode === "hardware" ? (
+                          <>
+                            <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                              Chế độ 1: Cảm biến Phần cứng thật (ESP32/Arduino)
+                            </div>
+                            <div className="text-slate-500 text-xs mt-1">
+                              Đồ thị đang ở trạng thái chờ. Bấm nút bên dưới để chọn cổng COM USB Serial và bắt đầu truyền dữ liệu thực tế.
+                            </div>
+                            <button
+                              onClick={handleConnectSerial}
+                              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm transition-all"
+                            >
+                              <Usb className="w-4 h-4" />
+                              <span>🔌 Cắm USB Serial kết nối ngay</span>
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                              Chế độ 2: Mô phỏng Thực nghiệm ảo (Digital Twin)
+                            </div>
+                            <div className="text-slate-500 text-xs mt-1">
+                              Đồ thị chưa chạy. Bấm nút bên dưới để bắt đầu luồng số liệu mô phỏng theo lý thuyết SGK.
+                            </div>
+                            <button
+                              onClick={() => {
+                                setIsRecording(true);
+                                setConnectionType("simulator");
+                                setStatusMsg("Đang chạy mô phỏng thực nghiệm ảo...");
+                              }}
+                              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition-all"
+                            >
+                              <Play className="w-4 h-4 fill-current" />
+                              <span>▶ Bắt đầu mô phỏng ngay</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ) : (() => {
                     const N = telemetryList.length;
@@ -1119,11 +1290,51 @@ export default function VernierIoTPage() {
                 /* Bar trace stream (Dạng cột cũ trên nền sáng) */
                 <div className="h-72 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 flex items-end gap-1.5 overflow-hidden shadow-inner">
                   {telemetryList.length === 0 ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-xs text-slate-500 font-mono gap-2">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                        <Play className="w-4 h-4 fill-current ml-0.5" />
+                    <div className="w-full h-full flex flex-col items-center justify-center text-xs text-slate-500 font-mono gap-2 p-4 text-center">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        expMode === "hardware" ? "bg-sky-100 text-sky-600" : "bg-purple-100 text-purple-600"
+                      }`}>
+                        {expMode === "hardware" ? <Usb className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
                       </div>
-                      <span>Hệ thống sẵn sàng! Bấm <strong>&quot;▶ Bắt đầu thí nghiệm&quot;</strong> hoặc cắm cáp USB Serial để vẽ đồ thị.</span>
+                      <div className="max-w-md">
+                        {expMode === "hardware" ? (
+                          <>
+                            <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                              Chế độ 1: Cảm biến Phần cứng thật (ESP32/Arduino)
+                            </div>
+                            <div className="text-slate-500 text-xs mt-1">
+                              Đồ thị đang ở trạng thái chờ. Bấm nút bên dưới để chọn cổng COM USB Serial.
+                            </div>
+                            <button
+                              onClick={handleConnectSerial}
+                              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm transition-all"
+                            >
+                              <Usb className="w-4 h-4" />
+                              <span>🔌 Cắm USB Serial kết nối ngay</span>
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                              Chế độ 2: Mô phỏng Thực nghiệm ảo (Digital Twin)
+                            </div>
+                            <div className="text-slate-500 text-xs mt-1">
+                              Đồ thị chưa chạy. Bấm nút bên dưới để bắt đầu mô phỏng.
+                            </div>
+                            <button
+                              onClick={() => {
+                                setIsRecording(true);
+                                setConnectionType("simulator");
+                                setStatusMsg("Đang chạy mô phỏng thực nghiệm ảo...");
+                              }}
+                              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition-all"
+                            >
+                              <Play className="w-4 h-4 fill-current" />
+                              <span>▶ Bắt đầu mô phỏng ngay</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     telemetryList.map((pt, i) => {
