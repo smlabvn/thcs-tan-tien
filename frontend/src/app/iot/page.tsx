@@ -194,10 +194,10 @@ void loop() {
     id: "ultrasonic",
     grade: "KHTN 7",
     title: "Đo Quãng Đường, Thời Gian & Tốc Độ Chuyển Động (s - t - v)",
-    sensorName: "Cảm biến Siêu âm HC-SR04 / Vernier Motion",
+    sensorName: "Cảm biến Siêu âm HC-SR04 (Trig=12, Echo=13)",
     defaultUnit: "cm",
     sampleRate: "20.0 Hz",
-    baudRate: 9600,
+    baudRate: 115200,
     theoryFormula: "v = \\frac{s}{t}; \\quad s(t) = v_0 \\cdot t + \\frac{1}{2} a t^2",
     calcTheory: (t) => {
       // Xe chuyển động đều với v = 25 cm/s
@@ -208,34 +208,97 @@ void loop() {
     paramMin: 0,
     paramMax: 10,
     paramDefault: 2,
-    arduinoCode: `// Arduino Uno + Cảm biến Siêu âm HC-SR04 (Trig D9, Echo D10)
-const int trigPin = 9;
-const int echoPin = 10;
+    arduinoCode: `// ================================================================
+// HỘP THÍ NGHIỆM KHTN 7: ĐO QUÃNG ĐƯỜNG, THỜI GIAN & TỐC ĐỘ (s - t - v)
+// Cảm biến: Siêu âm HC-SR04 (Trig -> GPIO 12, Echo -> GPIO 13)
+// Vi điều khiển: ESP32 (Type-C WROOM-32)
+// Màn hình OLED: SDA -> GPIO 21, SCL -> GPIO 22
+// 2 Nút nhấn: Nút 1 Start/Stop (GPIO 18), Nút 2 Reset (GPIO 19)
+// ================================================================
+
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+const int TRIG_PIN  = 12; // Chân Trig nối GPIO 12
+const int ECHO_PIN  = 13; // Chân Echo nối GPIO 13
+const int BTN_START = 18; // Nút 1: Bắt đầu / Tạm dừng
+const int BTN_RESET = 19; // Nút 2: Đặt lại
+
+bool isRunning = true;
+
 void setup() {
-  Serial.begin(9600);
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
+  Serial.begin(115200);
+
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(BTN_START, INPUT_PULLUP);
+  pinMode(BTN_RESET, INPUT_PULLUP);
+
+  Wire.begin(21, 22);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(5, 25);
+  display.println(F("KHTN 7: SIEU AM HC-SR04"));
+  display.display();
+  delay(800);
 }
+
 void loop() {
-  digitalWrite(trigPin, LOW);
+  if (digitalRead(BTN_START) == LOW) {
+    delay(50);
+    if (digitalRead(BTN_START) == LOW) {
+      isRunning = !isRunning;
+      while (digitalRead(BTN_START) == LOW) delay(10);
+    }
+  }
+
+  // Phát xung siêu âm 10 micro giây
+  digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
+  digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  long duration = pulseIn(echoPin, HIGH);
-  float distanceCm = duration * 0.034 / 2; // Tốc độ âm trong không khí
-  Serial.println(distanceCm);
-  delay(100);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // Timeout 30ms (~5 mét)
+  float distanceCm = (duration > 0) ? (duration * 0.0343 / 2.0) : 0;
+
+  if (isRunning) {
+    Serial.println(distanceCm, 1);
+  }
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.print(F("HC-SR04 MOTION | "));
+  display.print(isRunning ? F("RUN") : F("PAUSE"));
+
+  display.setCursor(0, 18);
+  display.setTextSize(2);
+  display.printf("%.1f cm", distanceCm);
+
+  display.setTextSize(1);
+  display.setCursor(0, 42);
+  display.printf("v_sound: 343 m/s");
+  display.display();
+
+  delay(60);
 }`
   },
   force: {
     id: "force",
     grade: "KHTN 6 & 8",
     title: "Định Luật Hooke (Lực Đàn Hồi) & Lực Đẩy Ác-si-mét",
-    sensorName: "Cảm biến Lực Loadcell HX711 / Lực kế điện tử Vernier",
+    sensorName: "Cảm biến Lực Loadcell 5kg + Module HX711 (Lực kế điện tử)",
     defaultUnit: "N",
     sampleRate: "10.0 Hz",
-    baudRate: 9600,
+    baudRate: 115200,
     theoryFormula: "F_{đh} = k \\cdot \\Delta l; \\quad F_A = d \\cdot V = \\rho \\cdot g \\cdot V",
     calcTheory: (deltaL) => {
       // Độ cứng lò xo k = 50 N/m = 0.5 N/cm
@@ -246,19 +309,126 @@ void loop() {
     paramMin: 0,
     paramMax: 20,
     paramDefault: 6,
-    arduinoCode: `// Arduino Uno + Module Cảm biến Lực Loadcell HX711
+    arduinoCode: `// ================================================================
+// HỘP THÍ NGHIỆM KHTN 6 & 8: LỰC ĐÀN HỒI (HOOKE) & LỰC ĐẨY ÁC-SI-MÉT
+// Cảm biến: Loadcell 5kg + Module khuếch đại 24-bit HX711
+// Vi điều khiển: ESP32 (Type-C WROOM-32)
+// Kết nối HX711: DT (Data) -> GPIO 26, SCK (Clock) -> GPIO 27
+// Màn hình OLED: SDA -> GPIO 21, SCL -> GPIO 22
+// 2 Nút nhấn: Nút 1 TARE về 0 (GPIO 18), Nút 2 Bắt đầu/Dừng (GPIO 19)
+// ================================================================
+
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include "HX711.h"
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
 HX711 scale;
+const int LOADCELL_DOUT_PIN = 26; // Chân DT của HX711 nối GPIO 26
+const int LOADCELL_SCK_PIN  = 27; // Chân SCK của HX711 nối GPIO 27
+
+const int BTN_TARE  = 18; // Nút 1: TARE (Khấu trừ bì / Về 0)
+const int BTN_PAUSE = 19; // Nút 2: Bắt đầu / Tạm dừng ghi đồ thị
+
+// Hệ số hiệu chuẩn cho Loadcell 5kg (Tinh chỉnh theo quả cân mẫu)
+// Ví dụ: Đặt quả cân 100g (0.98 N), nếu số đo lệch thì tăng/giảm số này
+float calibration_factor = 420.0; 
+
+bool isRunning = true;
+
 void setup() {
-  Serial.begin(9600);
-  scale.begin(A1, A0); // DOUT=A1, SCK=A0
-  scale.set_scale(2280.f); // Hiệu chuẩn lực kế
-  scale.tare();
+  Serial.begin(115200);
+
+  pinMode(BTN_TARE, INPUT_PULLUP);
+  pinMode(BTN_PAUSE, INPUT_PULLUP);
+
+  Wire.begin(21, 22);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(5, 20);
+  display.println(F("KHTN: LUC KE DIEN TU"));
+  display.setCursor(5, 35);
+  display.println(F("Loadcell 5kg + HX711"));
+  display.display();
+
+  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
+  scale.set_scale(calibration_factor);
+  scale.tare(); // Tự động về 0 khi bật nguồn
+  delay(800);
 }
+
 void loop() {
-  float forceNewton = scale.get_units(5) * 0.0098; // Quy đổi gram sang Newton
-  Serial.println(forceNewton, 2);
-  delay(100);
+  // 1. Nút 1 (GPIO 18): Nhấn để TARE (Về 0) khi treo móc / cốc nước
+  if (digitalRead(BTN_TARE) == LOW) {
+    delay(50);
+    if (digitalRead(BTN_TARE) == LOW) {
+      scale.tare();
+      display.clearDisplay();
+      display.setTextSize(1);
+      display.setCursor(20, 28);
+      display.println(F(">> DA TARE VE 0 <<"));
+      display.display();
+      delay(400);
+      while (digitalRead(BTN_TARE) == LOW) delay(10);
+    }
+  }
+
+  // 2. Nút 2 (GPIO 19): Nhấn để Bật / Tạm dừng ghi đồ thị
+  if (digitalRead(BTN_PAUSE) == LOW) {
+    delay(50);
+    if (digitalRead(BTN_PAUSE) == LOW) {
+      isRunning = !isRunning;
+      while (digitalRead(BTN_PAUSE) == LOW) delay(10);
+    }
+  }
+
+  // 3. Đọc số liệu từ Loadcell 5kg qua HX711
+  if (scale.is_ready()) {
+    float weight_grams = scale.get_units(2); // Lấy mẫu trung bình 2 lần
+    if (weight_grams < 0 && weight_grams > -1.5) weight_grams = 0; // Lọc khử nhiễu nhẹ quanh 0
+
+    // Quy đổi khối lượng (gram) sang Trọng lực / Lực đàn hồi (Newton)
+    // F = m (kg) * 9.8 = (weight_grams / 1000.0) * 9.80665
+    float force_N = (weight_grams / 1000.0) * 9.80665;
+    if (force_N < 0) force_N = 0;
+
+    // Gửi số liệu lực (Newton) lên web PhysiX qua cáp Type-C USB Serial
+    if (isRunning) {
+      Serial.println(force_N, 2);
+    }
+
+    // Hiển thị trực quan trên màn hình OLED SSD1306
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.print(F("LOADCELL 5KG | "));
+    display.print(isRunning ? F("RUN") : F("PAUSE"));
+
+    display.setCursor(0, 16);
+    display.setTextSize(2);
+    display.printf("%.2f N", force_N);
+
+    display.setTextSize(1);
+    display.setCursor(0, 38);
+    display.printf("m: %.1f g", weight_grams);
+
+    // Thanh đo lực kế đồ họa trực quan (dải 0 - 10N thường dùng trong thực hành)
+    display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
+    int barWidth = map((int)(force_N * 10), 0, 100, 0, 124);
+    if (barWidth > 124) barWidth = 124;
+    if (barWidth < 0) barWidth = 0;
+    display.fillRect(2, 54, barWidth, 7, SSD1306_WHITE);
+
+    display.display();
+  }
+
+  delay(80);
 }`
   },
   ohm: {
