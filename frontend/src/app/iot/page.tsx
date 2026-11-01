@@ -102,6 +102,8 @@ bool isRunning = true;
 
 void setup() {
   Serial.begin(115200);
+  delay(200);
+  Serial.println(F("\n>> HE THONG AM THANH MAX4466 KHOI DONG THANH CONG! <<"));
 
   pinMode(BTN_START, INPUT_PULLUP);
   pinMode(BTN_RESET, INPUT_PULLUP);
@@ -261,8 +263,9 @@ bool isRunning = true;
 
 void setup() {
   Serial.begin(115200);
-
-  // Kích hoạt trở kéo lên nội cho cổng quang & nút nhấn
+  delay(200);
+  Serial.println(F("\n>> HE THONG 2 CONG QUANG DA KHOI DONG THANH CONG! <<"));
+  Serial.println(F("Cong A: GPIO 14 | Cong B: GPIO 25. San sang!"));
   pinMode(GATE_A_PIN, INPUT_PULLUP);
   pinMode(GATE_B_PIN, INPUT_PULLUP);
   pinMode(BTN_START, INPUT_PULLUP);
@@ -429,6 +432,8 @@ bool isRunning = true;
 
 void setup() {
   Serial.begin(115200);
+  delay(200);
+  Serial.println(F("\n>> HE THONG AM THANH MAX4466 KHOI DONG THANH CONG! <<"));
 
   pinMode(BTN_TARE, INPUT_PULLUP);
   pinMode(BTN_PAUSE, INPUT_PULLUP);
@@ -553,6 +558,8 @@ Adafruit_INA219 ina219(0x40);
 
 void setup() {
   Serial.begin(115200);
+  delay(200);
+  Serial.println(F("\n>> HE THONG AM THANH MAX4466 KHOI DONG THANH CONG! <<"));
   Wire.begin(21, 22); // ESP32: SDA=21, SCL=22
 
   ina219.begin();
