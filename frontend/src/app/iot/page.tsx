@@ -61,7 +61,7 @@ const EXPERIMENTS: Record<ExperimentType, ExperimentConfig> = {
     id: "sound",
     grade: "KHTN 7",
     title: "Khảo Sát Độ To, Biên Độ & Sóng Âm Thanh",
-    sensorName: "Cảm biến Âm thanh Analog (KY-037 / MAX4466)",
+    sensorName: "Cảm biến Âm thanh MAX4466 (Microphone Amplifier)",
     defaultUnit: "dB",
     sampleRate: "50.0 kHz",
     baudRate: 115200,
@@ -80,7 +80,7 @@ const EXPERIMENTS: Record<ExperimentType, ExperimentConfig> = {
     arduinoCode: `// ================================================================
 // HỘP THÍ NGHIỆM KHTN 7: KHẢO SÁT SÓNG ÂM & BIÊN ĐỘ ÂM THANH
 // Vi điều khiển: ESP32 (Type-C WROOM-32)
-// Cảm biến âm thanh: KY-037 / MAX4466 (Nối AO -> GPIO 35)
+// Cảm biến âm thanh: MAX4466 Electret Mic Amplifier (Nối OUT -> GPIO 35, VCC -> 3V3)
 // Màn hình hiển thị: OLED 0.96 inch SSD1306 (I2C: SDA=21, SCL=22)
 // 2 Nút nhấn điều khiển: Nút 1 (GPIO 18), Nút 2 (GPIO 19)
 // ================================================================
@@ -93,11 +93,11 @@ const EXPERIMENTS: Record<ExperimentType, ExperimentConfig> = {
 #define SCREEN_HEIGHT 64
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-const int MIC_PIN   = 35; // Chân Analog đọc mic (GPIO 35)
+const int MIC_PIN   = 35; // Chân đọc OUT của cảm biến MAX4466 (GPIO 35)
 const int BTN_START = 18; // Nút 1: Bắt đầu / Tạm dừng
 const int BTN_RESET = 19; // Nút 2: Đặt lại
 
-const int SAMPLE_WINDOW = 50; // Cửa sổ lấy mẫu 50ms để bắt đỉnh sóng âm
+const int SAMPLE_WINDOW = 50; // Cửa sổ quét 50ms để bắt đỉnh sóng âm
 bool isRunning = true;
 
 void setup() {
@@ -114,14 +114,16 @@ void setup() {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
-  display.setCursor(10, 25);
+  display.setCursor(10, 20);
   display.println(F("KHTN 7: AM THANH"));
+  display.setCursor(10, 35);
+  display.println(F("Sensor: MAX4466"));
   display.display();
   delay(1000);
 }
 
 void loop() {
-  // 1. Đọc nút nhấn điều khiển
+  // 1. Đọc 2 nút nhấn vật lý
   if (digitalRead(BTN_START) == LOW) {
     delay(50);
     if (digitalRead(BTN_START) == LOW) {
@@ -137,7 +139,7 @@ void loop() {
     }
   }
 
-  // 2. Thuật toán lấy mẫu tìm biên độ đỉnh - đỉnh (Peak-to-Peak)
+  // 2. Lấy mẫu tìm biên độ đỉnh - đỉnh (Peak-to-Peak) của cảm biến MAX4466
   unsigned long startMillis = millis();
   unsigned int signalMax = 0;
   unsigned int signalMin = 4095;
@@ -149,12 +151,13 @@ void loop() {
   }
 
   // Tính biên độ sóng âm Vpp (Volt)
+  // Lưu ý: MAX4466 nuôi ở 3.3V có điểm tĩnh ~1.65V, Vpp dao động từ 0 đến 3.3V
   unsigned int peakToPeak = signalMax - signalMin;
   float volts = (peakToPeak * 3.3) / 4095.0;
 
   // Quy đổi độ to của âm ra đơn vị Decibel (dB) ước tính (45 - 100 dB)
   float soundDb = 45.0 + (volts * 28.0);
-  if (soundDb > 110.0) soundDb = 110.0;
+  if (soundDb > 105.0) soundDb = 105.0;
   if (soundDb < 45.0)  soundDb = 45.0;
 
   // 3. Gửi dữ liệu lên web PhysiX qua cổng USB Serial nếu đang chạy
@@ -162,11 +165,12 @@ void loop() {
     Serial.println(soundDb, 2);
   }
 
-  // 4. Hiển thị trên màn hình OLED SSD1306
+  // 4. Hiển thị thông số trên OLED SSD1306
   display.clearDisplay();
   display.setTextSize(1);
   display.setCursor(0, 0);
-  display.print(F("KHTN7: BIEN DO AM"));
+  display.print(F("MAX4466 MIC | "));
+  display.print(isRunning ? F("RUN") : F("PAUSE"));
 
   display.setCursor(0, 16);
   display.setTextSize(2);
@@ -174,7 +178,7 @@ void loop() {
 
   display.setTextSize(1);
   display.setCursor(0, 38);
-  display.printf("Vpp: %.2fV | %s", volts, isRunning ? "RUN" : "PAUSE");
+  display.printf("Vpp: %.2fV (Peak)", volts);
 
   // Thanh VU-meter trực quan theo độ to của âm
   display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
