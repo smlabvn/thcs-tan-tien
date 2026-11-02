@@ -774,6 +774,38 @@ export default function VernierIoTPage() {
             const trimmed = line.trim();
             if (!trimmed) continue;
 
+            // Auto Mode Switch from ESP32 All-in-One Master firmware
+            if (trimmed.includes("MODE:sound")) {
+              setActiveExp("sound");
+              setStatusMsg("ESP32 đã chuyển sang [Bài 1: Âm thanh MAX4466]");
+              continue;
+            }
+            if (trimmed.includes("MODE:ultrasonic")) {
+              setActiveExp("ultrasonic");
+              setStatusMsg("ESP32 đã chuyển sang [Bài 2: Tốc độ 2 Cổng quang]");
+              continue;
+            }
+            if (trimmed.includes("MODE:force")) {
+              setActiveExp("force");
+              setStatusMsg("ESP32 đã chuyển sang [Bài 3: Lực đàn hồi Loadcell 5kg]");
+              continue;
+            }
+            if (trimmed.includes("MODE:ohm")) {
+              setActiveExp("ohm");
+              setStatusMsg("ESP32 đã chuyển sang [Bài 4: Định luật Ôm INA219]");
+              continue;
+            }
+            if (trimmed.includes(">> PAUSE")) {
+              setIsRecording(false);
+              isRecordingRef.current = false;
+              continue;
+            }
+            if (trimmed.includes(">> RUN")) {
+              setIsRecording(true);
+              isRecordingRef.current = true;
+              continue;
+            }
+
             let parsedNum: number = NaN;
             // 1. Direct number check (e.g. "59.80" or "60")
             const direct = parseFloat(trimmed);
