@@ -24,7 +24,12 @@ import {
   FileSpreadsheet,
   X,
   Copy,
-  Check
+  Check,
+  BookmarkPlus,
+  FileDown,
+  Trash2,
+  Table,
+  Sparkles
 } from "lucide-react";
 import MathView from "@/components/MathView";
 import GeoGebraSpreadsheet from "@/components/GeoGebraSpreadsheet";
@@ -33,6 +38,22 @@ interface TelemetryPoint {
   time: number;
   measured: number;
   theory: number;
+  errorPct: number;
+}
+
+export interface RecordedPoint {
+  id: number;
+  trialIndex: number;
+  timestamp: string;
+  experimentId: ExperimentType;
+  experimentTitle: string;
+  paramName: string;
+  paramValue: number;
+  paramUnit: string;
+  measured: number;
+  theory: number;
+  unit: string;
+  absError: number;
   errorPct: number;
 }
 
@@ -626,10 +647,16 @@ export default function VernierIoTPage() {
 
   const [expMode, setExpMode] = useState<"hardware" | "simulator">("hardware");
   const [isRecording, setIsRecording] = useState<boolean>(false);
+  const isRecordingRef = useRef<boolean>(false);
   const [paramValue, setParamValue] = useState<number>(exp.paramDefault);
   const [telemetryList, setTelemetryList] = useState<TelemetryPoint[]>([]);
   const [chartMode, setChartMode] = useState<"line" | "bar">("line");
   const [zoomFocus, setZoomFocus] = useState<boolean>(true);
+
+  // Curated experiment records for lab report table & CSV
+  const [recordedPoints, setRecordedPoints] = useState<RecordedPoint[]>([]);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [currentLiveVal, setCurrentLiveVal] = useState<number>(0);
 
   // Hardware connection states
   const [connectionType, setConnectionType] = useState<"none" | "serial" | "bluetooth" | "simulator">("none");
@@ -646,11 +673,31 @@ export default function VernierIoTPage() {
   // Theoretical value based on current parameter
   const theoryValue = exp.calcTheory(paramValue);
 
+  // Active records for current experiment tab
+  const activeRecords = recordedPoints.filter((r) => r.experimentId === activeExp);
+
+  // Latest measured value (from telemetry list, or live fallback, or 0)
+  const latestVal = telemetryList.length > 0 ? (telemetryList.slice(-1)[0]?.measured ?? 0) : currentLiveVal;
+
+  // Toggle Pause / Resume recording
+  const toggleRecording = () => {
+    const next = !isRecording;
+    setIsRecording(next);
+    isRecordingRef.current = next;
+    if (next) {
+      if (expMode === "simulator") setConnectionType("simulator");
+      setStatusMsg(expMode === "hardware" ? "Đang tiếp tục thu thập dữ liệu từ cảm biến thật..." : "Đang chạy mô phỏng thực nghiệm...");
+    } else {
+      setStatusMsg(`Đã tạm dừng! Dữ liệu đang được giữ cố định ở ${latestVal} ${exp.defaultUnit} để học sinh quan sát, chốt số liệu và ghi chép.`);
+    }
+  };
+
   // Change experiment reset
   useEffect(() => {
     setParamValue(exp.paramDefault);
     setTelemetryList([]);
     setIsRecording(false);
+    isRecordingRef.current = false;
   }, [activeExp]);
 
   // Simulation Loop when in "simulator" mode
@@ -663,6 +710,7 @@ export default function VernierIoTPage() {
       // Sensor noise (Gaussian simulation +/- 2.5%)
       const noise = (Math.random() - 0.5) * (theoryValue * 0.05 || 1.5);
       const measured = parseFloat(Math.max(0, theoryValue + noise).toFixed(2));
+      setCurrentLiveVal(measured);
       const errorPct = theoryValue > 0
         ? parseFloat((Math.abs(measured - theoryValue) / theoryValue * 100).toFixed(2))
         : 0;
@@ -702,6 +750,7 @@ export default function VernierIoTPage() {
       setConnectionType("serial");
       setConnectionStatus("connected");
       setIsRecording(true);
+      isRecordingRef.current = true;
       setStatusMsg(`Đã kết nối trực tiếp cổng USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu...`);
 
       // Start reading stream
@@ -747,6 +796,13 @@ export default function VernierIoTPage() {
             }
 
             if (!isNaN(parsedNum)) {
+              setCurrentLiveVal(parsedNum);
+
+              // If paused by student, do NOT append to rolling graph so readings stay frozen for inspection
+              if (!isRecordingRef.current) {
+                continue;
+              }
+
               t += 0.1;
               const err = theoryValue > 0
                 ? parseFloat((Math.abs(parsedNum - theoryValue) / theoryValue * 100).toFixed(2))
@@ -793,6 +849,7 @@ export default function VernierIoTPage() {
       setConnectionType("bluetooth");
       setConnectionStatus("connected");
       setIsRecording(true);
+      isRecordingRef.current = true;
       setStatusMsg(`Đã kết nối Bluetooth không dây với ${device.name || "Thiết bị BLE KHTN"}`);
     } catch (err: any) {
       setConnectionStatus("disconnected");
@@ -803,6 +860,7 @@ export default function VernierIoTPage() {
   // Disconnect handler
   const handleDisconnect = async () => {
     keepReadingRef.current = false;
+    isRecordingRef.current = false;
     if (serialReaderRef.current) {
       try {
         await serialReaderRef.current.cancel();
@@ -827,25 +885,111 @@ export default function VernierIoTPage() {
     }
   };
 
-  // Export CSV Data
-  const handleExportCSV = () => {
-    let csv = `data:text/csv;charset=utf-8,Thoi_gian(s),Thong_so_thuc_nghiem,Gia_tri_do(${exp.defaultUnit}),Gia_tri_ly_thuyet(${exp.defaultUnit}),Sai_so_phan_tram\n`;
-    telemetryList.forEach((pt) => {
-      csv += `${pt.time},${paramValue},${pt.measured},${pt.theory},${pt.errorPct}%\n`;
-    });
-    const encoded = encodeURI(csv);
+  // Save current measurement snapshot into table
+  const handleSaveSnapshot = () => {
+    const measured = latestVal;
+    const theory = parseFloat(theoryValue.toFixed(2));
+    const absError = parseFloat(Math.abs(measured - theory).toFixed(2));
+    const errPct = theory > 0 ? parseFloat(((absError / theory) * 100).toFixed(2)) : 0;
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+    const newPoint: RecordedPoint = {
+      id: Date.now(),
+      trialIndex: activeRecords.length + 1,
+      timestamp: timeStr,
+      experimentId: activeExp,
+      experimentTitle: exp.title,
+      paramName: exp.paramName,
+      paramValue: paramValue,
+      paramUnit: exp.paramUnit,
+      measured: measured,
+      theory: theory,
+      unit: exp.defaultUnit,
+      absError: absError,
+      errorPct: errPct,
+    };
+
+    setRecordedPoints((prev) => [...prev, newPoint]);
+    setSaveSuccessMsg(`Đã lưu Lần đo ${newPoint.trialIndex}: ${measured} ${exp.defaultUnit}!`);
+    setTimeout(() => setSaveSuccessMsg(null), 3000);
+  };
+
+  // Delete a specific recorded point
+  const handleDeleteRecord = (id: number) => {
+    setRecordedPoints((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  // Clear all records of the active experiment
+  const handleClearActiveRecords = () => {
+    if (activeRecords.length === 0) return;
+    if (confirm(`Bạn có chắc chắn muốn xóa tất cả ${activeRecords.length} lần đo trong bảng này?`)) {
+      setRecordedPoints((prev) => prev.filter((r) => r.experimentId !== activeExp));
+    }
+  };
+
+  // Export CSV Data with UTF-8 BOM for Microsoft Excel Vietnamese font support
+  const handleExportCSV = (mode: "records" | "telemetry" = "records") => {
+    const BOM = "\uFEFF";
+    let csvContent = "";
+    let filename = "";
+
+    if (mode === "records" && activeRecords.length > 0) {
+      filename = `Bao_Cao_Thuc_Nghiem_${exp.id}_${Date.now()}.csv`;
+      
+      csvContent += `BÁO CÁO KẾT QUẢ THÍ NGHIỆM KHTN & VẬT LÝ\n`;
+      csvContent += `Tên bài thí nghiệm,"${exp.title}"\n`;
+      csvContent += `Khối lớp,"${exp.grade}"\n`;
+      csvContent += `Cảm biến sử dụng,"${exp.sensorName}"\n`;
+      csvContent += `Thời gian xuất báo cáo,"${new Date().toLocaleString("vi-VN")}"\n`;
+      csvContent += `Hệ thống thực hành,"Hộp Thí Nghiệm SMLab PhysiX IoT (ESP32 Web Serial)"\n\n`;
+
+      csvContent += `Lần đo,Thời gian ghi nhận,Thông số cài đặt (${exp.paramName}),Đơn vị thông số,Giá trị thực nghiệm đo được,Đơn vị đo,Giá trị lý thuyết chuẩn,Sai số tuyệt đối Δ,Sai số tương đối (%),Đánh giá chất lượng phép đo\n`;
+
+      activeRecords.forEach((pt) => {
+        let rating = "Chính xác cao (Chuẩn SGK)";
+        if (pt.errorPct > 15) rating = "Cần căn chỉnh thêm";
+        else if (pt.errorPct > 5) rating = "Chấp nhận được (Hợp lý)";
+
+        csvContent += `${pt.trialIndex},"${pt.timestamp}",${pt.paramValue},"${pt.paramUnit}",${pt.measured},"${pt.unit}",${pt.theory},${pt.absError},${pt.errorPct}%,"${rating}"\n`;
+      });
+
+      const avgM = (activeRecords.reduce((s, p) => s + p.measured, 0) / activeRecords.length).toFixed(2);
+      const avgT = (activeRecords.reduce((s, p) => s + p.theory, 0) / activeRecords.length).toFixed(2);
+      const avgDelta = (activeRecords.reduce((s, p) => s + p.absError, 0) / activeRecords.length).toFixed(2);
+      const avgE = (activeRecords.reduce((s, p) => s + p.errorPct, 0) / activeRecords.length).toFixed(2);
+      
+      csvContent += `\nGIÁ TRỊ TRUNG BÌNH (N=${activeRecords.length}),,,,"${avgM}","${exp.defaultUnit}","${avgT}","±${avgDelta}",${avgE}%,"Đạt yêu cầu bài thực hành"\n`;
+    } else {
+      // Continuous telemetry export
+      filename = `Nhat_Ky_So_Lieu_Live_${exp.id}_${Date.now()}.csv`;
+      csvContent += `NHẬT KÝ THU NHẬN SỐ LIỆU CẢM BIẾN THỜI GIAN THỰC (LIVE STREAM)\n`;
+      csvContent += `Bài thí nghiệm,"${exp.title}"\n`;
+      csvContent += `Cảm biến,"${exp.sensorName}"\n`;
+      csvContent += `Thời gian xuất,"${new Date().toLocaleString("vi-VN")}"\n\n`;
+      csvContent += `Thời gian (giây),Thông số cài đặt (${exp.paramName}),Giá trị đo thực nghiệm (${exp.defaultUnit}),Giá trị lý thuyết chuẩn (${exp.defaultUnit}),Sai số tương đối (%)\n`;
+
+      const listToExport = telemetryList.length > 0 ? telemetryList : [];
+      listToExport.forEach((pt) => {
+        csvContent += `${pt.time},${paramValue},${pt.measured},${pt.theory},${pt.errorPct}%\n`;
+      });
+    }
+
+    const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = encoded;
-    link.download = `SMLab_IoT_${exp.id}_${Date.now()}.csv`;
+    link.href = url;
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Average error calculation
   const avgError = telemetryList.length > 0
     ? (telemetryList.reduce((acc, curr) => acc + curr.errorPct, 0) / telemetryList.length).toFixed(2)
     : "1.25";
-
-  const latestVal = telemetryList.slice(-1)[0]?.measured ?? 0;
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(exp.arduinoCode);
@@ -915,11 +1059,17 @@ export default function VernierIoTPage() {
               </button>
 
               <button
-                onClick={handleExportCSV}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-100 transition-all shadow-xs"
+                onClick={() => handleExportCSV(activeRecords.length > 0 ? "records" : "telemetry")}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
+                title="Xuất bảng số liệu đo ra file CSV chuẩn Microsoft Excel"
               >
-                <Download className="w-4 h-4 text-emerald-600" />
-                <span>Xuất CSV</span>
+                <FileDown className="w-4 h-4" />
+                <span>Xuất CSV (Excel)</span>
+                {activeRecords.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-emerald-800 text-[10px]">
+                    {activeRecords.length}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -1093,19 +1243,23 @@ export default function VernierIoTPage() {
                     connectionType === "serial" || connectionType === "bluetooth" ? (
                       <>
                         <button
-                          onClick={() => {
-                            const next = !isRecording;
-                            setIsRecording(next);
-                            setStatusMsg(next ? "Đang tiếp tục thu thập từ cảm biến thật..." : "Đã tạm dừng vẽ đồ thị.");
-                          }}
+                          onClick={toggleRecording}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
                             isRecording
                               ? "bg-amber-500 hover:bg-amber-600 text-white"
-                              : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                              : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/20"
                           }`}
                         >
                           {isRecording ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
                           <span>{isRecording ? "Tạm dừng" : "Tiếp tục"}</span>
+                        </button>
+                        <button
+                          onClick={handleSaveSnapshot}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition-all shadow-xs"
+                          title="Lưu số liệu tức thời vào Bảng thực hành"
+                        >
+                          <BookmarkPlus className="w-3.5 h-3.5" />
+                          <span>Lưu điểm ({latestVal})</span>
                         </button>
                         <button
                           onClick={handleDisconnect}
@@ -1125,32 +1279,35 @@ export default function VernierIoTPage() {
                       </button>
                     )
                   ) : (
-                    <button
-                      onClick={() => {
-                        const next = !isRecording;
-                        setIsRecording(next);
-                        if (next) {
-                          setConnectionType("simulator");
-                          setStatusMsg("Đang chạy mô phỏng thực nghiệm ảo...");
-                        } else {
-                          setStatusMsg("Đã tạm dừng mô phỏng. Bấm 'Tiếp tục' để mô phỏng tiếp.");
-                        }
-                      }}
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
-                        isRecording
-                          ? "bg-amber-500 hover:bg-amber-600 text-white"
-                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                      }`}
-                    >
-                      {isRecording ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                      <span>{isRecording ? "Tạm dừng mô phỏng" : "▶ Bắt đầu mô phỏng"}</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={toggleRecording}
+                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                          isRecording
+                            ? "bg-amber-500 hover:bg-amber-600 text-white"
+                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/20"
+                        }`}
+                      >
+                        {isRecording ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                        <span>{isRecording ? "Tạm dừng mô phỏng" : "▶ Bắt đầu mô phỏng"}</span>
+                      </button>
+                      <button
+                        onClick={handleSaveSnapshot}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition-all shadow-xs"
+                        title="Lưu số liệu tức thời vào Bảng thực hành"
+                      >
+                        <BookmarkPlus className="w-3.5 h-3.5" />
+                        <span>Lưu điểm ({latestVal})</span>
+                      </button>
+                    </>
                   )}
 
                   <button
                     onClick={() => {
                       setTelemetryList([]);
+                      setCurrentLiveVal(0);
                       setIsRecording(false);
+                      isRecordingRef.current = false;
                       setStatusMsg("Đã đặt lại đồ thị về trạng thái ban đầu.");
                     }}
                     className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700"
@@ -1825,9 +1982,14 @@ export default function VernierIoTPage() {
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                   Bảng Nhật Ký Số Liệu (Live)
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono">
-                  Đơn vị: {exp.defaultUnit}
-                </span>
+                <button
+                  onClick={handleSaveSnapshot}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-100 hover:bg-sky-200 text-sky-800 dark:bg-sky-950 dark:text-sky-300 text-[10px] font-bold transition-all"
+                  title="Chốt giá trị hiện tại vào Sổ nhật ký"
+                >
+                  <BookmarkPlus className="w-3 h-3" />
+                  <span>Lưu điểm ({latestVal})</span>
+                </button>
               </div>
 
               <div className="overflow-x-auto">
@@ -1862,6 +2024,266 @@ export default function VernierIoTPage() {
             </div>
 
           </div>
+        </div>
+
+        {/* ================= SỔ NHẬT KÝ ĐO & BẢNG KẾT QUẢ THỰC NGHIỆM (GHI SỐ LIỆU & XUẤT CSV) ================= */}
+        <div className="w-full rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-sm flex flex-col gap-4">
+          
+          {/* Header & Main Controls */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Sổ Nhật Ký Đo &amp; Bảng Kết Quả Thực Nghiệm</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold">
+                      {activeRecords.length} lần đo
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Tạm dừng khi cảm biến ổn định, bấm <strong>"Lưu Điểm Đo Này"</strong> để chốt số liệu và bấm <strong>"Xuất Báo Cáo CSV"</strong> để mở bằng Excel.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Button 1: Toggle Pause / Resume */}
+              <button
+                onClick={toggleRecording}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-xs ${
+                  isRecording
+                    ? "bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-400/40"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md ring-2 ring-emerald-500/30"
+                }`}
+                title={isRecording ? "Cố định số liệu tức thời để ghi chép" : "Tiếp tục thu thập dữ liệu"}
+              >
+                {isRecording ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
+                <span>{isRecording ? "⏸ Tạm Dừng & Cố Định Số Liệu" : "▶ Tiếp Tục Đo Live"}</span>
+              </button>
+
+              {/* Button 2: Snapshot Current Point */}
+              <button
+                onClick={handleSaveSnapshot}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black shadow-md hover:shadow-lg transition-all"
+                title="Ghi nhận điểm đo này vào Bảng thực hành"
+              >
+                <BookmarkPlus className="w-4 h-4" />
+                <span>📸 Lưu Điểm Đo Này (Lần {activeRecords.length + 1})</span>
+                <span className="px-2 py-0.5 rounded-md bg-sky-500/80 font-mono text-[11px] font-bold">
+                  {latestVal} {exp.defaultUnit}
+                </span>
+              </button>
+
+              {/* Button 3: Export CSV (Excel) */}
+              <button
+                onClick={() => handleExportCSV(activeRecords.length > 0 ? "records" : "telemetry")}
+                disabled={activeRecords.length === 0 && telemetryList.length === 0}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Tải file CSV có tiếng Việt chuẩn UTF-8 để mở trực tiếp trong Excel"
+              >
+                <FileDown className="w-4 h-4" />
+                <span>📥 Xuất Báo Cáo CSV (Excel)</span>
+              </button>
+
+              {/* Button 4: Clear Table */}
+              {activeRecords.length > 0 && (
+                <button
+                  onClick={handleClearActiveRecords}
+                  className="p-2.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 border border-red-200 dark:border-red-900/50 transition-all"
+                  title="Xóa tất cả các lần đo trong bảng này"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Pause Status Alert Banner */}
+          {!isRecording && (
+            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700/60 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5 text-amber-900 dark:text-amber-200 font-bold">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+                </span>
+                <span>
+                  HỆ THỐNG ĐANG TẠM DỪNG: Số đo cố định là{" "}
+                  <strong className="font-mono text-sm underline text-amber-700 dark:text-amber-300">
+                    {latestVal} {exp.defaultUnit}
+                  </strong>{" "}
+                  (Lý thuyết SGK: <strong className="font-mono text-sm">{theoryValue.toFixed(1)} {exp.defaultUnit}</strong>, Biến số: <strong className="font-mono text-sm">{paramValue} {exp.paramUnit}</strong>).
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSaveSnapshot}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5"
+                >
+                  <BookmarkPlus className="w-3.5 h-3.5" />
+                  <span>Ghi vào Bảng (Lần {activeRecords.length + 1})</span>
+                </button>
+                <button
+                  onClick={toggleRecording}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Tiếp tục đo</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Save Success Toast */}
+          {saveSuccessMsg && (
+            <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-2 shadow-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>{saveSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* Data Table */}
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-left font-sans text-xs">
+              <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700 text-[11px] uppercase tracking-wider">
+                <tr>
+                  <th className="py-3 px-3 text-center w-16">Lần đo</th>
+                  <th className="py-3 px-3">Thời gian</th>
+                  <th className="py-3 px-3">{exp.paramName}</th>
+                  <th className="py-3 px-3 text-amber-600 dark:text-amber-400">Giá trị đo thực nghiệm</th>
+                  <th className="py-3 px-3 text-sky-600 dark:text-sky-400">Lý thuyết chuẩn</th>
+                  <th className="py-3 px-3">Sai số tuyệt đối (Δ)</th>
+                  <th className="py-3 px-3">Sai số tương đối (%)</th>
+                  <th className="py-3 px-3">Đánh giá chất lượng</th>
+                  <th className="py-3 px-3 text-center w-12">Xóa</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono text-[11px]">
+                {activeRecords.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 px-4 text-center">
+                      <div className="flex flex-col items-center justify-center gap-2 text-slate-400">
+                        <Table className="w-8 h-8 text-slate-300 dark:text-slate-700" />
+                        <div className="font-bold text-slate-600 dark:text-slate-300 text-xs font-sans">
+                          Chưa có lần đo nào được ghi nhận vào bảng
+                        </div>
+                        <p className="text-[11px] text-slate-400 max-w-md font-sans">
+                          Cách làm: Chỉnh biến số thí nghiệm hoặc để cảm biến đo ổn định → Bấm <strong>"Tạm Dừng"</strong> → Bấm <strong>"Lưu Điểm Đo Này"</strong> để chốt số liệu vào bảng.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  activeRecords.map((r) => {
+                    const isAccurate = r.errorPct <= 5;
+                    const isAcceptable = r.errorPct > 5 && r.errorPct <= 15;
+                    return (
+                      <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="py-2.5 px-3 text-center font-bold text-slate-800 dark:text-slate-200">
+                          #{r.trialIndex}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-500 font-sans">{r.timestamp}</td>
+                        <td className="py-2.5 px-3 font-semibold text-slate-700 dark:text-slate-300">
+                          {r.paramValue} {r.paramUnit}
+                        </td>
+                        <td className="py-2.5 px-3 font-black text-amber-600 dark:text-amber-400">
+                          {r.measured} {r.unit}
+                        </td>
+                        <td className="py-2.5 px-3 font-bold text-sky-600 dark:text-sky-400">
+                          {r.theory} {r.unit}
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-slate-600 dark:text-slate-400">
+                          ±{r.absError} {r.unit}
+                        </td>
+                        <td className="py-2.5 px-3 font-bold text-emerald-600 dark:text-emerald-400">
+                          {r.errorPct}%
+                        </td>
+                        <td className="py-2.5 px-3 font-sans">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              isAccurate
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                : isAcceptable
+                                ? "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300"
+                                : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                            }`}
+                          >
+                            {isAccurate ? "Chính xác cao (SGK)" : isAcceptable ? "Chấp nhận được" : "Cần căn chỉnh thêm"}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            onClick={() => handleDeleteRecord(r.id)}
+                            className="p-1 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                            title="Xóa dòng này"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table Summary Footer */}
+          {activeRecords.length > 0 && (() => {
+            const avgM = (activeRecords.reduce((s, p) => s + p.measured, 0) / activeRecords.length).toFixed(2);
+            const avgT = (activeRecords.reduce((s, p) => s + p.theory, 0) / activeRecords.length).toFixed(2);
+            const avgDelta = (activeRecords.reduce((s, p) => s + p.absError, 0) / activeRecords.length).toFixed(2);
+            const avgE = (activeRecords.reduce((s, p) => s + p.errorPct, 0) / activeRecords.length).toFixed(2);
+
+            return (
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4 text-xs">
+                <div className="flex flex-wrap items-center gap-6 font-mono">
+                  <div>
+                    <span className="text-slate-500 font-sans">Tổng số phép đo:</span>{" "}
+                    <strong className="text-slate-800 dark:text-white font-bold">{activeRecords.length} lần</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-sans">Đo TB (X̄):</span>{" "}
+                    <strong className="text-amber-600 dark:text-amber-400 font-bold">{avgM} {exp.defaultUnit}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-sans">Lý thuyết TB:</span>{" "}
+                    <strong className="text-sky-600 dark:text-sky-400 font-bold">{avgT} {exp.defaultUnit}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-sans">Sai số tuyệt đối TB:</span>{" "}
+                    <strong className="text-slate-700 dark:text-slate-300 font-bold">±{avgDelta} {exp.defaultUnit}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-sans">Sai số tương đối TB:</span>{" "}
+                    <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{avgE}%</strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleExportCSV("records")}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    <span>Tải Báo Cáo CSV (Excel)</span>
+                  </button>
+                  <button
+                    onClick={() => handleExportCSV("telemetry")}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all"
+                    title="Xuất toàn bộ dãy số liệu thời gian thực dạng sóng"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Dữ liệu Live</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ================= GEOGEBRA SPREADSHEET & GRAPH FOR MOTION EXPERIMENT ================= */}

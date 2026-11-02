@@ -121,14 +121,21 @@ export default function GeoGebraSpreadsheet({
   };
 
   const handleExportCSV = () => {
-    let csv = `data:text/csv;charset=utf-8,STT,d1_${unitY},t1_${unitX},d2_${unitY},t2_${unitX}\n`;
+    const BOM = "\uFEFF";
+    let csv = `BẢNG SỐ LIỆU THÍ NGHIỆM CHUYỂN ĐỘNG (CHUẨN GEOGEBRA)\n`;
+    csv += `STT,d1 (${unitY}),t1 (${unitX}),d2 (${unitY}),t2 (${unitX}),Vận tốc v1 (${unitY}/${unitX}),Vận tốc v2 (${unitY}/${unitX})\n`;
     rows.forEach((r) => {
-      csv += `${r.id},${r.d1},${r.t1},${r.d2},${r.t2}\n`;
+      csv += `${r.id},${r.d1},${r.t1},${r.d2},${r.t2},${stats.v1},${stats.v2}\n`;
     });
+    const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = encodeURI(csv);
-    link.download = `bang_so_lieu_geogebra_${Date.now()}.csv`;
+    link.href = url;
+    link.setAttribute("download", `bang_so_lieu_geogebra_${Date.now()}.csv`);
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
