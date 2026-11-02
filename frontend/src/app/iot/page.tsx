@@ -724,7 +724,28 @@ export default function VernierIoTPage() {
 
           for (const line of lines) {
             const trimmed = line.trim();
-            const parsedNum = parseFloat(trimmed);
+            if (!trimmed) continue;
+
+            let parsedNum: number = NaN;
+            // 1. Direct number check (e.g. "59.80" or "60")
+            const direct = parseFloat(trimmed);
+            if (!isNaN(direct) && /^-?\d+(\.\d+)?/.test(trimmed)) {
+              parsedNum = direct;
+            } else {
+              // 2. Intelligent pattern matching based on keywords in test / production output
+              // Matches: "Do to: 59.8", "Luc: 0.98", "v = 35.2", "v: 35.2", "KET QUA: ...", etc.
+              const matchWithLabel = trimmed.match(/(?:Do to|Luc|Van toc|v|d|I|s|F|m)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+              if (matchWithLabel && matchWithLabel[1]) {
+                parsedNum = parseFloat(matchWithLabel[1]);
+              } else {
+                // Fallback: extract the first floating-point number in the line
+                const matchAny = trimmed.match(/-?\d+(?:\.\d+)?/);
+                if (matchAny) {
+                  parsedNum = parseFloat(matchAny[0]);
+                }
+              }
+            }
+
             if (!isNaN(parsedNum)) {
               t += 0.1;
               const err = theoryValue > 0
