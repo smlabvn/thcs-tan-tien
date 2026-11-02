@@ -122,13 +122,12 @@ const int SAMPLE_WINDOW = 50; // Cửa sổ quét 50ms để bắt đỉnh sóng
 bool isRunning = true;
 
 void setup() {
-  Serial.begin(115200);
-  delay(200);
-  Serial.println(F("\n>> HE THONG AM THANH MAX4466 KHOI DONG THANH CONG! <<"));
-
   pinMode(BTN_START, INPUT_PULLUP);
   pinMode(BTN_RESET, INPUT_PULLUP);
   analogReadResolution(12); // ESP32 12-bit ADC (0 - 4095)
+  Serial.begin(115200);
+  delay(200);
+  Serial.println(F("\n>> HE THONG AM THANH MAX4466 KHOI DONG THANH CONG! <<"));
 
   Wire.begin(21, 22);
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
@@ -454,7 +453,7 @@ bool isRunning = true;
 void setup() {
   Serial.begin(115200);
   delay(200);
-  Serial.println(F("\n>> HE THONG AM THANH MAX4466 KHOI DONG THANH CONG! <<"));
+  Serial.println(F("\n>> HE THONG LUC KE LOADCELL 5KG KHOI DONG THANH CONG! <<"));
 
   pinMode(BTN_TARE, INPUT_PULLUP);
   pinMode(BTN_PAUSE, INPUT_PULLUP);
@@ -580,7 +579,7 @@ Adafruit_INA219 ina219(0x40);
 void setup() {
   Serial.begin(115200);
   delay(200);
-  Serial.println(F("\n>> HE THONG AM THANH MAX4466 KHOI DONG THANH CONG! <<"));
+  Serial.println(F("\n>> HE THONG DINH LUAT OHM INA219 KHOI DONG THANH CONG! <<"));
   Wire.begin(21, 22); // ESP32: SDA=21, SCL=22
 
   ina219.begin();
