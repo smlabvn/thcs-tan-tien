@@ -775,6 +775,10 @@ export default function VernierIoTPage() {
             if (!trimmed) continue;
 
             // Auto Mode Switch from ESP32 All-in-One Master firmware
+            if (trimmed.includes("MODE:menu")) {
+              setStatusMsg("ESP32 đang ở Menu chọn bài. Hãy bấm Nút 2 để chuyển bài, Nút 1 để vào bài!");
+              continue;
+            }
             if (trimmed.includes("MODE:sound")) {
               setActiveExp("sound");
               setStatusMsg("ESP32 đã chuyển sang [Bài 1: Âm thanh MAX4466]");

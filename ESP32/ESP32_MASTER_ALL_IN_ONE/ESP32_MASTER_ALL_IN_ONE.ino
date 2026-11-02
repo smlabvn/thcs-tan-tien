@@ -3,17 +3,26 @@
 //             TRƯỜNG THCS TÂY TIẾN - ĐỀ TÀI KHOA HỌC KỸ THUẬT (KHKT)
 //
 // TÍCH HỢP 4 BÀI THÍ NGHIỆM TRÊN 1 BO MẠCH DUY NHẤT (ESP32 Type-C WROOM-32)
-// CHỌN BÀI THÍ NGHIỆM TRỰC TIẾP QUA 2 NÚT NHẤN & MÀN HÌNH OLED 0.96"
+// CHỌN & CHUYỂN ĐỔI BÀI THÍ NGHIỆM TIỆN LỢI QUA 2 NÚT NHẤN VẬT LÝ & OLED
 //
-// 1. MÀN HÌNH OLED 0.96" I2C : SDA -> GPIO 21, SCL -> GPIO 22 (Địa chỉ 0x3C)
-// 2. NÚT NHẤN 1 (XANH)        : GPIO 18 (Menu: OK / Chọn bài | Vào bài: Tạm dừng / Tare)
-// 3. NÚT NHẤN 2 (ĐỎ)          : GPIO 19 (Menu: Chuyển bài | Vào bài: Giữ 1.5s về Menu)
-// 4. MICRO MAX4466 (KHTN 7)   : Chân OUT -> GPIO 35 (ADC1), VCC -> 3.3V
-// 5. 2 CỔNG QUANG (KHTN 7/10) : Cổng A -> GPIO 13, Cổng B -> GPIO 25, VCC -> 5V
-// 6. LOADCELL 5KG + HX711     : DT -> GPIO 26, SCK -> GPIO 27, VCC -> 5V
-// 7. CẢM BIẾN DÒNG INA219     : SDA -> GPIO 21, SCL -> GPIO 22 (Địa chỉ 0x40)
+// * QUY TẮC ĐIỀU KHIỂN:
+//   - KHI Ở MENU CHÍNH:
+//       + NÚT 2 (GPIO 19): Nhấn để CHUYỂN BÀI (1 -> 2 -> 3 -> 4 -> 1)
+//       + NÚT 1 (GPIO 18): Nhấn để VÀO BÀI ĐÃ CHỌN (OK)
+//   - KHI ĐANG TRONG BÀI THÍ NGHIỆM:
+//       + NÚT 2 (GPIO 19): NHẤN 1 CÁI ĐỂ QUAY LẠI MENU CHỌN BÀI KHÁC NGAY!
+//       + NÚT 1 (GPIO 18): Tạm dừng / Tiếp tục (Loadcell: Tare về 0)
 //
-// Tốc độ Baudrate Serial: 115200 bps
+// * SƠ ĐỒ CHÂN:
+//   1. OLED 0.96" I2C           : SDA -> GPIO 21, SCL -> GPIO 22 (0x3C)
+//   2. NÚT 1 (XANH)             : GPIO 18
+//   3. NÚT 2 (ĐỎ)               : GPIO 19
+//   4. MICRO MAX4466 (KHTN 7)   : OUT -> GPIO 35, VCC -> 3.3V
+//   5. 2 CỔNG QUANG (KHTN 7/10) : Cổng A -> GPIO 13, Cổng B -> GPIO 25, VCC -> 5V
+//   6. LOADCELL 5KG + HX711     : DT -> GPIO 26, SCK -> GPIO 27, VCC -> 5V
+//   7. CẢM BIẾN DÒNG INA219     : SDA -> GPIO 21, SCL -> GPIO 22 (0x40)
+//
+// Tốc độ Baudrate: 115200 bps
 // ==============================================================================
 
 #include <Wire.h>
@@ -27,15 +36,15 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 // Chân 2 nút nhấn vật lý
-const int BTN_OK   = 18; // Nút 1: OK / Bắt đầu / Tạm dừng / Tare
-const int BTN_MODE = 19; // Nút 2: Chuyển mục / Giữ 1.5s để thoát về Menu
+const int BTN_OK   = 18; // Nút 1: Vào bài / Tạm dừng / Tare
+const int BTN_MODE = 19; // Nút 2: Chuyển bài ở Menu / Nhấn để THOÁT VỀ MENU
 
-// Chân Cảm biến Âm thanh MAX4466
+// Chân Micro MAX4466
 const int MIC_PIN = 35; // GPIO 35 (ADC1)
 
 // Chân 2 Cổng quang điện hồng ngoại
-const int GATE_A_PIN = 13; // Cổng A (Bắt đầu)
-const int GATE_B_PIN = 25; // Cổng B (Về đích)
+const int GATE_A_PIN = 13; // Cổng A
+const int GATE_B_PIN = 25; // Cổng B
 const float DISTANCE_S_CM = 30.0; // Khoảng cách giữa 2 cổng (cm)
 
 // Chân Loadcell 5kg + HX711
@@ -47,7 +56,7 @@ float loadcell_calib = 420.0;
 // Cảm biến I2C INA219
 Adafruit_INA219 ina219(0x40);
 
-// ================= CÁC BIẾN TRẠNG THÁI HỆ THỐNG =================
+// ================= CÁC TRẠNG THÁI HỆ THỐNG =================
 enum SystemState {
   STATE_MENU = 0,
   STATE_EXP_SOUND = 1,
@@ -83,14 +92,24 @@ void IRAM_ATTR isrGateB() {
   }
 }
 
-// ================= SETUP KHỞI ĐỘNG HỆ THỐNG =================
+// Khai báo trước các hàm
+void showMenu();
+void handleMenuInput();
+void enterExperiment(int expId);
+void returnToMenu();
+void loopSoundExperiment();
+void loopPhotogateExperiment();
+void loopLoadcellExperiment();
+void loopOhmExperiment();
+
+// ================= KHỞI ĐỘNG (SETUP) =================
 void setup() {
   Serial.begin(115200);
   delay(300);
 
   Serial.println(F("\n========================================================"));
   Serial.println(F(">> HOP THI NGHIEM SMLAB PHYSIX ALL-IN-ONE KHOI DONG! <<"));
-  Serial.println(F("THCS TAY TIEN - HO TRO CHON 4 CHE DO QUA 2 NUT NHAN"));
+  Serial.println(F("THCS TAY TIEN - 4 CHE DO - QUAY LAI MENU BANG NUT 2"));
   Serial.println(F("========================================================"));
 
   pinMode(BTN_OK, INPUT_PULLUP);
@@ -99,7 +118,6 @@ void setup() {
   pinMode(GATE_B_PIN, INPUT_PULLUP);
   analogReadResolution(12);
 
-  // Khởi động I2C (OLED + INA219)
   Wire.begin(21, 22);
 
   if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
@@ -109,34 +127,26 @@ void setup() {
     display.setTextSize(1);
     display.setCursor(10, 15);
     display.println(F("THCS TAY TIEN"));
-    display.setTextSize(1);
     display.setCursor(10, 32);
     display.println(F("HOP THI NGHIEM KHTN"));
     display.setCursor(10, 48);
     display.println(F("ALL-IN-ONE (ESP32)"));
     display.display();
     delay(1200);
-  } else {
-    Serial.println(F("[CANH BAO]: Khong tim thay OLED I2C 0x3C!"));
   }
 
-  // Khởi động INA219
   if (ina219.begin()) {
     inaOK = true;
     ina219.setCalibration_32V_2A();
-    Serial.println(F(">> [INA219]: Khoi dong thanh cong!"));
   }
 
-  // Khởi động HX711 non-blocking
   scale.begin(LOADCELL_DOUT, LOADCELL_SCK);
   if (scale.wait_ready_timeout(500)) {
     hx711OK = true;
     scale.set_scale(loadcell_calib);
     scale.tare();
-    Serial.println(F(">> [HX711 Loadcell]: Khoi dong thanh cong!"));
   }
 
-  // Vào Menu chọn bài
   showMenu();
 }
 
@@ -145,25 +155,17 @@ void loop() {
   if (currentState == STATE_MENU) {
     handleMenuInput();
   } else {
-    // Kiểm tra Nút 2 (GPIO 19): Nhấn giữ 1.2s để THOÁT VỀ MENU
+    // NÚT 2 (GPIO 19): NHẤN 1 CÁI ĐỂ QUAY LẠI MENU CHỌN BÀI KHÁC NGAY LẬP TỨC!
     if (digitalRead(BTN_MODE) == LOW) {
-      unsigned long pressStart = millis();
-      bool longPress = false;
-      while (digitalRead(BTN_MODE) == LOW) {
-        if (millis() - pressStart > 1000) {
-          longPress = true;
-          break;
-        }
-        delay(20);
-      }
-      if (longPress) {
+      delay(40); // Khử rung phím
+      if (digitalRead(BTN_MODE) == LOW) {
         returnToMenu();
-        while (digitalRead(BTN_MODE) == LOW) delay(10);
+        while (digitalRead(BTN_MODE) == LOW) delay(10); // Chờ nhả nút
         return;
       }
     }
 
-    // Chạy logic của bài thí nghiệm tương ứng
+    // Chạy bài thí nghiệm tương ứng
     switch (currentState) {
       case STATE_EXP_SOUND:
         loopSoundExperiment();
@@ -183,7 +185,7 @@ void loop() {
   }
 }
 
-// ================= GIAO DIỆN & ĐIỀU KHIỂN MENU CHÍNH =================
+// ================= GIAO DIỆN & XỬ LÝ MENU =================
 void showMenu() {
   if (!oledOK) return;
   display.clearDisplay();
@@ -208,18 +210,18 @@ void showMenu() {
   display.setCursor(0, 46);
   display.print(menuCursor == 4 ? F("> 4.Dinh luat Ohm") : F("  4.Dinh luat Ohm"));
 
-  // Hướng dẫn bấm nút ở chân màn hình
+  // Dòng hướng dẫn dưới đáy màn hình
   display.drawLine(0, 56, 128, 56, SSD1306_WHITE);
   display.setCursor(0, 57);
-  display.println(F("Nut 2:Chon  Nut 1:OK"));
+  display.println(F("N2: Chon   N1: Vao"));
 
   display.display();
 }
 
 void handleMenuInput() {
-  // Nút 2 (GPIO 19): Chuyển con trỏ (1 -> 2 -> 3 -> 4 -> 1)
+  // Nút 2: Chuyển con trỏ (1 -> 2 -> 3 -> 4 -> 1)
   if (digitalRead(BTN_MODE) == LOW) {
-    delay(50);
+    delay(40);
     if (digitalRead(BTN_MODE) == LOW) {
       menuCursor++;
       if (menuCursor > 4) menuCursor = 1;
@@ -228,9 +230,9 @@ void handleMenuInput() {
     }
   }
 
-  // Nút 1 (GPIO 18): Bấm OK để VÀO BÀI ĐÃ CHỌN
+  // Nút 1: Vào bài đã chọn
   if (digitalRead(BTN_OK) == LOW) {
-    delay(50);
+    delay(40);
     if (digitalRead(BTN_OK) == LOW) {
       enterExperiment(menuCursor);
       while (digitalRead(BTN_OK) == LOW) delay(10);
@@ -275,19 +277,20 @@ void enterExperiment(int expId) {
     display.setCursor(10, 24);
     display.println(F("DANG KHOI DONG..."));
     display.display();
-    delay(400);
+    delay(300);
   }
 }
 
+// Hàm quay lại Menu chọn bài khác
 void returnToMenu() {
-  // Gỡ ngắt nếu đang ở cổng quang
   if (currentState == STATE_EXP_PHOTOGATE) {
     detachInterrupt(digitalPinToInterrupt(GATE_A_PIN));
     detachInterrupt(digitalPinToInterrupt(GATE_B_PIN));
   }
 
   currentState = STATE_MENU;
-  Serial.println(F("\n>> [MENU]: Da quay ve Menu Chon Bai Thi Nghiem!"));
+  Serial.println(F("\n>> MODE:menu"));
+  Serial.println(F(">> [MENU]: Da quay ve Menu Chon Bai Thi Nghiem!"));
 
   if (oledOK) {
     display.clearDisplay();
@@ -295,16 +298,16 @@ void returnToMenu() {
     display.setCursor(15, 26);
     display.println(F("VE MENU CHINH..."));
     display.display();
-    delay(300);
+    delay(250);
   }
   showMenu();
 }
 
-// ================= [BÀI 1]: SÓNG ÂM THANH (MAX4466) =================
+// ================= [BÀI 1]: SÓNG ÂM THANH =================
 void loopSoundExperiment() {
   // Nút 1: Tạm dừng / Tiếp tục
   if (digitalRead(BTN_OK) == LOW) {
-    delay(50);
+    delay(40);
     if (digitalRead(BTN_OK) == LOW) {
       isRunning = !isRunning;
       Serial.println(isRunning ? F(">> RUN") : F(">> PAUSE"));
@@ -312,12 +315,14 @@ void loopSoundExperiment() {
     }
   }
 
-  // Quét biên độ Peak-to-Peak 50ms
   unsigned long startMillis = millis();
   unsigned int signalMax = 0;
   unsigned int signalMin = 4095;
 
   while (millis() - startMillis < 50) {
+    // Kiểm tra Nút 2 thoát sớm
+    if (digitalRead(BTN_MODE) == LOW) return;
+
     unsigned int sample = analogRead(MIC_PIN);
     if (sample > signalMax) signalMax = sample;
     if (sample < signalMin) signalMin = sample;
@@ -341,8 +346,10 @@ void loopSoundExperiment() {
     display.clearDisplay();
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.print(F("MAX4466 MIC | "));
+    display.print(F("AM THANH | "));
     display.print(isRunning ? F("RUN") : F("PAUSE"));
+    display.setCursor(85, 0);
+    display.print(F("[N2:Menu]"));
 
     display.setCursor(0, 16);
     display.setTextSize(2);
@@ -350,7 +357,7 @@ void loopSoundExperiment() {
 
     display.setTextSize(1);
     display.setCursor(0, 38);
-    display.printf("Vpp: %.2fV (Peak)", volts);
+    display.printf("Vpp: %.2fV", volts);
 
     display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
     int barW = map((int)soundDb, 45, 95, 0, 124);
@@ -361,11 +368,11 @@ void loopSoundExperiment() {
   }
 }
 
-// ================= [BÀI 2]: 2 CỔNG QUANG ĐIỆN HỒNG NGOẠI =================
+// ================= [BÀI 2]: 2 CỔNG QUANG ĐIỆN =================
 void loopPhotogateExperiment() {
   // Nút 1: Đặt lại lượt mới
   if (digitalRead(BTN_OK) == LOW) {
-    delay(50);
+    delay(40);
     if (digitalRead(BTN_OK) == LOW) {
       passA = false;
       passB = false;
@@ -398,7 +405,8 @@ void loopPhotogateExperiment() {
       display.clearDisplay();
       display.setTextSize(1);
       display.setCursor(0, 0);
-      display.println(F("2 CONG QUANG (s-t-v)"));
+      display.print(F("2 CONG QUANG | "));
+      display.print(F("[N2:Menu]"));
 
       display.setCursor(0, 16);
       display.setTextSize(2);
@@ -407,30 +415,47 @@ void loopPhotogateExperiment() {
       display.setTextSize(1);
       display.setCursor(0, 38);
       display.printf("t = %.3f s", delta_t);
-      display.setCursor(0, 50);
-      display.printf("s = %.1f cm (A->B)", DISTANCE_S_CM);
+      display.setCursor(0, 52);
+      display.printf("N1:Reset | N2:Menu");
       display.display();
     }
-    delay(300);
+    delay(200);
   } else if (passA && !passB) {
     if (oledOK) {
       display.clearDisplay();
       display.setTextSize(1);
-      display.setCursor(0, 15);
-      display.println(F("CONG A: DA QUA!"));
-      display.setCursor(0, 35);
+      display.setCursor(0, 0);
+      display.print(F("CONG A: DA QUA! [N2]"));
+      display.setCursor(0, 24);
       display.println(F("DANG CHO CONG B..."));
+      display.setCursor(0, 52);
+      display.println(F("BAM NUT 2 DE VE MENU"));
+      display.display();
+    }
+  } else {
+    // Chờ xuất phát
+    if (oledOK) {
+      display.clearDisplay();
+      display.setTextSize(1);
+      display.setCursor(0, 0);
+      display.print(F("TOC DO IR | [N2:Menu]"));
+      display.setCursor(0, 22);
+      display.println(F("SAN SANG: THA XE"));
+      display.setCursor(0, 38);
+      display.printf("s = %.1f cm (A->B)", DISTANCE_S_CM);
+      display.setCursor(0, 52);
+      display.println(F("N1:Reset | N2:Ve Menu"));
       display.display();
     }
   }
   delay(40);
 }
 
-// ================= [BÀI 3]: LỰC ĐÀN HỒI LOADCELL 5KG =================
+// ================= [BÀI 3]: LỰC KẾ LOADCELL 5KG =================
 void loopLoadcellExperiment() {
   // Nút 1: TARE về 0
   if (digitalRead(BTN_OK) == LOW) {
-    delay(50);
+    delay(40);
     if (digitalRead(BTN_OK) == LOW) {
       scale.tare();
       Serial.println(F(">> [TARE]: Da dua luc ke ve 0.00 N!"));
@@ -441,7 +466,7 @@ void loopLoadcellExperiment() {
         display.println(F(">> DA TARE VE 0 <<"));
         display.display();
       }
-      delay(300);
+      delay(250);
       while (digitalRead(BTN_OK) == LOW) delay(10);
     }
   }
@@ -464,7 +489,7 @@ void loopLoadcellExperiment() {
       display.clearDisplay();
       display.setTextSize(1);
       display.setCursor(0, 0);
-      display.println(F("LUC KE DIEN TU"));
+      display.print(F("LUC KE | [N2:Menu]"));
 
       display.setCursor(0, 16);
       display.setTextSize(2);
@@ -482,14 +507,14 @@ void loopLoadcellExperiment() {
       display.display();
     }
   }
-  delay(80);
+  delay(60);
 }
 
 // ================= [BÀI 4]: ĐỊNH LUẬT ÔM INA219 =================
 void loopOhmExperiment() {
   // Nút 1: Tạm dừng / Tiếp tục
   if (digitalRead(BTN_OK) == LOW) {
-    delay(50);
+    delay(40);
     if (digitalRead(BTN_OK) == LOW) {
       isRunning = !isRunning;
       Serial.println(isRunning ? F(">> RUN") : F(">> PAUSE"));
@@ -518,8 +543,7 @@ void loopOhmExperiment() {
     display.clearDisplay();
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.print(F("DINH LUAT OHM | "));
-    display.print(isRunning ? F("RUN") : F("PAUSE"));
+    display.print(F("DINH LUAT OHM | [N2]"));
 
     display.setCursor(0, 16);
     display.setTextSize(2);
@@ -536,5 +560,5 @@ void loopOhmExperiment() {
     display.fillRect(2, 54, barW, 7, SSD1306_WHITE);
     display.display();
   }
-  delay(100);
+  delay(80);
 }
