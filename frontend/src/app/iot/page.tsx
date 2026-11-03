@@ -740,14 +740,17 @@ export default function VernierIoTPage() {
     setIsRecording(next);
     isRecordingRef.current = next;
     if (next) {
-      if (expMode === "simulator") setConnectionType("simulator");
-      setStatusMsg(expMode === "hardware" ? "Đang tiếp tục thu thập dữ liệu từ cảm biến thật..." : "Đang chạy mô phỏng thực nghiệm...");
+      if (expMode === "simulator") {
+        setConnectionType("simulator");
+        setConnectionStatus("connected");
+      }
+      setStatusMsg(expMode === "hardware" ? "Đang tiếp tục thu thập dữ liệu từ cảm biến thật..." : "Đang chạy mô phỏng thực nghiệm ảo (Digital Twin)...");
     } else {
       setStatusMsg(`Đã tạm dừng! Dữ liệu đang được giữ cố định ở ${latestVal} ${exp.defaultUnit} để học sinh quan sát, chốt số liệu và ghi chép.`);
     }
   };
 
-  // Change experiment reset - LUÔN DUY TRÌ KẾT NỐI PHẦN CỨNG KHI ĐỔI BÀI THÍ NGHIỆM!
+  // Change experiment reset - LUÔN DUY TRÌ KẾT NỐI PHẦN CỨNG HOẶC MÔ PHỎNG KHI ĐỔI BÀI THÍ NGHIỆM!
   useEffect(() => {
     setParamValue(exp.paramDefault);
     setTelemetryList([]);
@@ -755,13 +758,17 @@ export default function VernierIoTPage() {
     setPeakForce(0);
     setLastPhotogateRun(null);
 
-    // NẾU ĐANG KẾT NỐI USB SERIAL HOẶC BLE, DUY TRÌ KẾT NỐI VÀ TIẾP TỤC ĐỌC DỮ LIỆU!
-    // CHỈ DỪNG KHI NGƯỜI DÙNG BẤM NÚT "NGẮT KẾT NỐI".
-    if (connectionStatus === "connected") {
+    if (expMode === "simulator") {
+      setIsRecording(true);
+      isRecordingRef.current = true;
+      setConnectionType("simulator");
+      setConnectionStatus("connected");
+      setStatusMsg(`Đang chạy mô phỏng bài: ${exp.title} (Digital Twin)...`);
+    } else if (connectionStatus === "connected") {
       setIsRecording(true);
       isRecordingRef.current = true;
       setStatusMsg(`Đang duy trì kết nối USB Serial liên tục! Đã chuyển sang bài: ${exp.title}. Sẵn sàng nhận số liệu...`);
-    } else if (expMode === "simulator") {
+    } else {
       setIsRecording(false);
       isRecordingRef.current = false;
     }
@@ -769,9 +776,47 @@ export default function VernierIoTPage() {
 
   // Simulation Loop when in "simulator" mode
   useEffect(() => {
-    // Không chạy vòng lặp cộng dồn thời gian nếu đang ở bài Cổng quang (vì cổng quang đo theo từng lượt xe chạy)
-    if (expMode !== "simulator" || connectionType !== "simulator" || !isRecording || activeExp === "ultrasonic") return;
+    if (expMode !== "simulator" || !isRecording) return;
 
+    // 1. Đối với bài 2 Cổng quang điện (ultrasonic): Mô phỏng lượt thả xe lăn qua 2 cổng
+    if (activeExp === "ultrasonic") {
+      const runSimPhotogate = () => {
+        const curTheory = theoryValueRef.current;
+        const simSpeed = parseFloat((curTheory + (Math.random() - 0.5) * 3.0).toFixed(2));
+        const simTime = parseFloat((paramValue / simSpeed).toFixed(4));
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+        setLastPhotogateRun({
+          speed: simSpeed,
+          time: simTime,
+          timestamp: timeStr,
+        });
+        setCurrentLiveVal(simSpeed);
+
+        const err = curTheory > 0
+          ? parseFloat((Math.abs(simSpeed - curTheory) / curTheory * 100).toFixed(2))
+          : 0;
+
+        setTelemetryList((prev) => [
+          ...prev.slice(-35),
+          {
+            time: simTime,
+            measured: simSpeed,
+            theory: parseFloat(curTheory.toFixed(2)),
+            errorPct: err,
+          },
+        ]);
+      };
+
+      // Chạy ngay 1 lượt ban đầu nếu chưa có dữ liệu
+      runSimPhotogate();
+      // Và tiếp tục tự động thả xe lăn định kỳ mỗi 3.5 giây trong chế độ mô phỏng
+      const interval = setInterval(runSimPhotogate, 3500);
+      return () => clearInterval(interval);
+    }
+
+    // 2. Đối với các bài đo liên tục (sound, force, ohm)
     let t = 0;
     const interval = setInterval(() => {
       t += 0.1;
@@ -798,7 +843,7 @@ export default function VernierIoTPage() {
     }, 150);
 
     return () => clearInterval(interval);
-  }, [expMode, connectionType, isRecording, theoryValue, activeExp]);
+  }, [expMode, isRecording, theoryValue, activeExp, paramValue]);
 
   // Web Serial API handler
   const handleConnectSerial = async () => {
@@ -1321,7 +1366,9 @@ export default function VernierIoTPage() {
                 setExpMode("hardware");
                 if (connectionType === "simulator") {
                   setConnectionType("none");
+                  setConnectionStatus("disconnected");
                   setIsRecording(false);
+                  isRecordingRef.current = false;
                   setTelemetryList([]);
                 }
                 setStatusMsg("Chế độ 1: Cảm biến Phần cứng thật. Vui lòng cắm cáp USB Serial kết nối ESP32.");
@@ -1353,11 +1400,20 @@ export default function VernierIoTPage() {
             <button
               onClick={() => {
                 setExpMode("simulator");
-                if (connectionType === "serial" || connectionType === "bluetooth") {
-                  handleDisconnect();
+                if (serialPortRef.current) {
+                  keepReadingRef.current = false;
+                  if (serialReaderRef.current) {
+                    try { serialReaderRef.current.cancel(); } catch (e) {}
+                  }
+                  try { serialPortRef.current.close(); } catch (e) {}
+                  serialPortRef.current = null;
+                  serialReaderRef.current = null;
                 }
                 setConnectionType("simulator");
-                setStatusMsg("Chế độ 2: Mô phỏng Thực nghiệm ảo. Bấm '▶ Bắt đầu mô phỏng' để tiến hành.");
+                setConnectionStatus("connected");
+                setIsRecording(true);
+                isRecordingRef.current = true;
+                setStatusMsg("Chế độ 2: Đang chạy mô phỏng thực nghiệm ảo (Digital Twin) theo SGK...");
               }}
               className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold text-left transition-all ${
                 expMode === "simulator"
@@ -2187,7 +2243,9 @@ export default function VernierIoTPage() {
                             <button
                               onClick={() => {
                                 setIsRecording(true);
+                                isRecordingRef.current = true;
                                 setConnectionType("simulator");
+                                setConnectionStatus("connected");
                                 setStatusMsg("Đang chạy mô phỏng thực nghiệm ảo...");
                               }}
                               className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition-all"
@@ -2503,7 +2561,9 @@ export default function VernierIoTPage() {
                             <button
                               onClick={() => {
                                 setIsRecording(true);
+                                isRecordingRef.current = true;
                                 setConnectionType("simulator");
+                                setConnectionStatus("connected");
                                 setStatusMsg("Đang chạy mô phỏng thực nghiệm ảo...");
                               }}
                               className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition-all"
