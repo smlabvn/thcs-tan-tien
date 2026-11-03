@@ -671,6 +671,10 @@ export default function VernierIoTPage() {
 
   // Theoretical value based on current parameter
   const theoryValue = exp.calcTheory(paramValue);
+  const theoryValueRef = useRef<number>(theoryValue);
+  useEffect(() => {
+    theoryValueRef.current = theoryValue;
+  }, [theoryValue]);
 
   // Active records for current experiment tab
   const activeRecords = recordedPoints.filter((r) => r.experimentId === activeExp);
@@ -691,12 +695,22 @@ export default function VernierIoTPage() {
     }
   };
 
-  // Change experiment reset
+  // Change experiment reset - LUÔN DUY TRÌ KẾT NỐI PHẦN CỨNG KHI ĐỔI BÀI THÍ NGHIỆM!
   useEffect(() => {
     setParamValue(exp.paramDefault);
     setTelemetryList([]);
-    setIsRecording(false);
-    isRecordingRef.current = false;
+    setCurrentLiveVal(0);
+
+    // NẾU ĐANG KẾT NỐI USB SERIAL HOẶC BLE, DUY TRÌ KẾT NỐI VÀ TIẾP TỤC ĐỌC DỮ LIỆU!
+    // CHỈ DỪNG KHI NGƯỜI DÙNG BẤM NÚT "NGẮT KẾT NỐI".
+    if (connectionStatus === "connected") {
+      setIsRecording(true);
+      isRecordingRef.current = true;
+      setStatusMsg(`Đang duy trì kết nối USB Serial liên tục! Đã chuyển sang bài: ${exp.title}. Sẵn sàng nhận số liệu...`);
+    } else if (expMode === "simulator") {
+      setIsRecording(false);
+      isRecordingRef.current = false;
+    }
   }, [activeExp]);
 
   // Simulation Loop when in "simulator" mode
@@ -839,8 +853,9 @@ export default function VernierIoTPage() {
               }
 
               t += 0.1;
-              const err = theoryValue > 0
-                ? parseFloat((Math.abs(parsedNum - theoryValue) / theoryValue * 100).toFixed(2))
+              const curTheory = theoryValueRef.current;
+              const err = curTheory > 0
+                ? parseFloat((Math.abs(parsedNum - curTheory) / curTheory * 100).toFixed(2))
                 : 0;
 
               setTelemetryList((prev) => [
@@ -848,7 +863,7 @@ export default function VernierIoTPage() {
                 {
                   time: parseFloat(t.toFixed(1)),
                   measured: parsedNum,
-                  theory: parseFloat(theoryValue.toFixed(2)),
+                  theory: parseFloat(curTheory.toFixed(2)),
                   errorPct: err,
                 },
               ]);
@@ -1604,28 +1619,56 @@ export default function VernierIoTPage() {
                 <div className="h-72 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 overflow-hidden shadow-xs flex flex-col justify-between">
                   {telemetryList.length === 0 ? (
                     <div className="w-full h-full flex flex-col items-center justify-center text-xs text-slate-500 font-mono gap-2 p-4 text-center">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        expMode === "hardware" ? "bg-sky-100 text-sky-600" : "bg-purple-100 text-purple-600"
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                        expMode === "hardware"
+                          ? connectionStatus === "connected"
+                            ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400 ring-4 ring-emerald-500/20"
+                            : "bg-sky-100 text-sky-600"
+                          : "bg-purple-100 text-purple-600"
                       }`}>
                         {expMode === "hardware" ? <Usb className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
                       </div>
                       <div className="max-w-md">
                         {expMode === "hardware" ? (
-                          <>
-                            <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
-                              Chế độ 1: Cảm biến Phần cứng thật (ESP32/Arduino)
-                            </div>
-                            <div className="text-slate-500 text-xs mt-1">
-                              Đồ thị đang ở trạng thái chờ. Bấm nút bên dưới để chọn cổng COM USB Serial và bắt đầu truyền dữ liệu thực tế.
-                            </div>
-                            <button
-                              onClick={handleConnectSerial}
-                              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm transition-all"
-                            >
-                              <Usb className="w-4 h-4" />
-                              <span>🔌 Cắm USB Serial kết nối ngay</span>
-                            </button>
-                          </>
+                          connectionStatus === "connected" ? (
+                            <>
+                              <div className="font-bold text-slate-800 dark:text-slate-200 text-sm flex items-center justify-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>Đang Duy Trì Kết Nối USB Serial Liên Tục</span>
+                              </div>
+                              <div className="text-slate-500 text-xs mt-1.5 max-w-sm">
+                                {activeExp === "ultrasonic"
+                                  ? "2 Cổng quang đã sẵn sàng! Hãy thả xe lăn qua Cổng A rồi đến Cổng B để ghi nhận đồ thị tốc độ."
+                                  : activeExp === "force"
+                                  ? "Cảm biến Loadcell đã sẵn sàng! Hãy móc quả nặng hoặc tác dụng lực lên cảm biến."
+                                  : activeExp === "sound"
+                                  ? "Micro đang thu nhận âm thanh thời gian thực. Hãy tạo âm thanh để vẽ đồ thị sóng."
+                                  : "Cảm biến đang sẵn sàng nhận dữ liệu dòng điện & điện áp."}
+                              </div>
+                              <div className="mt-3 flex items-center justify-center gap-2">
+                                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                                  <span>CỔNG COM ĐANG MỞ • CHỜ DỮ LIỆU ĐO MỚI</span>
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                                Chế độ 1: Cảm biến Phần cứng thật (ESP32/Arduino)
+                              </div>
+                              <div className="text-slate-500 text-xs mt-1">
+                                Đồ thị đang ở trạng thái chờ. Bấm nút bên dưới để chọn cổng COM USB Serial và bắt đầu truyền dữ liệu thực tế.
+                              </div>
+                              <button
+                                onClick={handleConnectSerial}
+                                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm transition-all"
+                              >
+                                <Usb className="w-4 h-4" />
+                                <span>🔌 Cắm USB Serial kết nối ngay</span>
+                              </button>
+                            </>
+                          )
                         ) : (
                           <>
                             <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
@@ -1892,28 +1935,56 @@ export default function VernierIoTPage() {
                 <div className="h-72 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 flex items-end gap-1.5 overflow-hidden shadow-inner">
                   {telemetryList.length === 0 ? (
                     <div className="w-full h-full flex flex-col items-center justify-center text-xs text-slate-500 font-mono gap-2 p-4 text-center">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        expMode === "hardware" ? "bg-sky-100 text-sky-600" : "bg-purple-100 text-purple-600"
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                        expMode === "hardware"
+                          ? connectionStatus === "connected"
+                            ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400 ring-4 ring-emerald-500/20"
+                            : "bg-sky-100 text-sky-600"
+                          : "bg-purple-100 text-purple-600"
                       }`}>
                         {expMode === "hardware" ? <Usb className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
                       </div>
                       <div className="max-w-md">
                         {expMode === "hardware" ? (
-                          <>
-                            <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
-                              Chế độ 1: Cảm biến Phần cứng thật (ESP32/Arduino)
-                            </div>
-                            <div className="text-slate-500 text-xs mt-1">
-                              Đồ thị đang ở trạng thái chờ. Bấm nút bên dưới để chọn cổng COM USB Serial.
-                            </div>
-                            <button
-                              onClick={handleConnectSerial}
-                              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm transition-all"
-                            >
-                              <Usb className="w-4 h-4" />
-                              <span>🔌 Cắm USB Serial kết nối ngay</span>
-                            </button>
-                          </>
+                          connectionStatus === "connected" ? (
+                            <>
+                              <div className="font-bold text-slate-800 dark:text-slate-200 text-sm flex items-center justify-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>Đang Duy Trì Kết Nối USB Serial Liên Tục</span>
+                              </div>
+                              <div className="text-slate-500 text-xs mt-1.5 max-w-sm">
+                                {activeExp === "ultrasonic"
+                                  ? "2 Cổng quang điện đã sẵn sàng! Hãy thả xe lăn qua Cổng A rồi đến Cổng B."
+                                  : activeExp === "force"
+                                  ? "Cảm biến Loadcell đã sẵn sàng! Hãy móc quả nặng lên cảm biến."
+                                  : activeExp === "sound"
+                                  ? "Micro đang thu nhận âm thanh thời gian thực."
+                                  : "Cảm biến đang sẵn sàng nhận dữ liệu dòng điện & điện áp."}
+                              </div>
+                              <div className="mt-3 flex items-center justify-center gap-2">
+                                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                                  <span>CỔNG COM ĐANG MỞ • CHỜ DỮ LIỆU ĐO MỚI</span>
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                                Chế độ 1: Cảm biến Phần cứng thật (ESP32/Arduino)
+                              </div>
+                              <div className="text-slate-500 text-xs mt-1">
+                                Đồ thị đang ở trạng thái chờ. Bấm nút bên dưới để chọn cổng COM USB Serial.
+                              </div>
+                              <button
+                                onClick={handleConnectSerial}
+                                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm transition-all"
+                              >
+                                <Usb className="w-4 h-4" />
+                                <span>🔌 Cắm USB Serial kết nối ngay</span>
+                              </button>
+                            </>
+                          )
                         ) : (
                           <>
                             <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
