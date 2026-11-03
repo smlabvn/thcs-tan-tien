@@ -556,11 +556,11 @@ void loop() {
       // Điện trở mẫu R = 120 Ohm -> I(mA) = (U / 120) * 1000
       return Number(((voltage / 120.0) * 1000.0).toFixed(1));
     },
-    paramName: "Hiệu điện thế (U)",
+    paramName: "Hiệu điện thế nguồn (U)",
     paramUnit: "V",
     paramMin: 0,
-    paramMax: 12,
-    paramDefault: 6,
+    paramMax: 15,
+    paramDefault: 7.4, // Mặc định 7.4V (2 viên pin 18650 mắc nối tiếp)
     arduinoCode: `// ==============================================================
 // ESP32 / ARDUINO + INA219 + OLED SSD1306 (I2C)
 // THCS TAY TIEN - MO HINH THI NGHIEM DINH LUAT OHM (KHTN 9)
@@ -667,6 +667,10 @@ export default function VernierIoTPage() {
     timestamp: string;
   } | null>(null);
 
+  // Điện áp thực tế đo từ cảm biến INA219 (ví dụ 2 viên pin 18650: 7.4V - 8.4V)
+  const [realVoltage, setRealVoltage] = useState<number | null>(null);
+  const [autoSyncOhmVoltage, setAutoSyncOhmVoltage] = useState<boolean>(true);
+
   // Hàm gửi lệnh điều khiển 2 chiều qua Web Serial xuống vi điều khiển ESP32
   const sendSerialCommand = async (cmd: string) => {
     if (!serialPortRef.current || !serialPortRef.current.writable) return;
@@ -698,6 +702,16 @@ export default function VernierIoTPage() {
   useEffect(() => {
     theoryValueRef.current = theoryValue;
   }, [theoryValue]);
+
+  const activeExpRef = useRef<ExperimentType>(activeExp);
+  useEffect(() => {
+    activeExpRef.current = activeExp;
+  }, [activeExp]);
+
+  const autoSyncOhmVoltageRef = useRef<boolean>(autoSyncOhmVoltage);
+  useEffect(() => {
+    autoSyncOhmVoltageRef.current = autoSyncOhmVoltage;
+  }, [autoSyncOhmVoltage]);
 
   // Active records for current experiment tab
   const activeRecords = recordedPoints.filter((r) => r.experimentId === activeExp);
@@ -839,21 +853,25 @@ export default function VernierIoTPage() {
             }
             if (trimmed.includes("MODE:sound")) {
               setActiveExp("sound");
+              activeExpRef.current = "sound";
               setStatusMsg("ESP32 đã chuyển sang [Bài 1: Âm thanh MAX4466]");
               continue;
             }
             if (trimmed.includes("MODE:ultrasonic")) {
               setActiveExp("ultrasonic");
+              activeExpRef.current = "ultrasonic";
               setStatusMsg("ESP32 đã chuyển sang [Bài 2: Tốc độ 2 Cổng quang]");
               continue;
             }
             if (trimmed.includes("MODE:force")) {
               setActiveExp("force");
+              activeExpRef.current = "force";
               setStatusMsg("ESP32 đã chuyển sang [Bài 3: Lực đàn hồi Loadcell 5kg]");
               continue;
             }
             if (trimmed.includes("MODE:ohm")) {
               setActiveExp("ohm");
+              activeExpRef.current = "ohm";
               setStatusMsg("ESP32 đã chuyển sang [Bài 4: Định luật Ôm INA219]");
               continue;
             }
@@ -895,6 +913,18 @@ export default function VernierIoTPage() {
                   setParamValue(newD);
                   setStatusMsg(`Hộp ESP32 đã đổi khoảng cách s = ${newD} cm!`);
                   continue;
+                }
+              }
+            }
+
+            // Bắt điện áp thực tế U (V) từ cảm biến INA219 (đo nguồn pin 18650, USB hoặc ắc quy)
+            const matchU = trimmed.match(/(?:U\s*=|U\s*:)\s*(-?\d+(?:\.\d+)?)/i);
+            if (matchU && matchU[1]) {
+              const measuredU = parseFloat(matchU[1]);
+              if (!isNaN(measuredU) && measuredU > 0.5 && measuredU < 30.0) {
+                setRealVoltage(measuredU);
+                if (activeExpRef.current === "ohm" && autoSyncOhmVoltageRef.current) {
+                  setParamValue(parseFloat(measuredU.toFixed(2)));
                 }
               }
             }
@@ -983,7 +1013,7 @@ export default function VernierIoTPage() {
 
             if (!isNaN(parsedNum)) {
               setCurrentLiveVal(parsedNum);
-              if (activeExp === "force" && parsedNum > 0.15) {
+              if (activeExpRef.current === "force" && parsedNum > 0.15) {
                 setPeakForce((prev) => Math.max(prev, parsedNum));
               }
 
@@ -995,13 +1025,13 @@ export default function VernierIoTPage() {
               // QUAN TRỌNG:
               // 1. Với bài 2 Cổng quang điện (ultrasonic): Đây là bài đo theo từng lượt xe chạy.
               // Khi xe không chạy (chưa thả hoặc đã dừng ở cuối dốc), TUYỆT ĐỐI KHÔNG tự động tăng t += 0.1!
-              if (activeExp === "ultrasonic") {
+              if (activeExpRef.current === "ultrasonic") {
                 continue;
               }
 
               // 2. Với bài Lực kế Loadcell (force):
               // Khi lò xo ở trạng thái nghỉ (F < 0.08N), không cộng dồn t liên tục để tránh làm trôi mất đỉnh lực vừa kéo!
-              if (activeExp === "force" && parsedNum < 0.08) {
+              if (activeExpRef.current === "force" && parsedNum < 0.08) {
                 continue;
               }
 
@@ -1646,8 +1676,17 @@ export default function VernierIoTPage() {
                 {activeExp === "ohm" && (
                   <div className="w-full flex items-center justify-around">
                     <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950 border border-purple-300 dark:border-purple-800 text-center">
-                      <div className="text-[10px] text-purple-700 dark:text-purple-300 font-bold">NGUỒN ĐIỆN VÀO</div>
+                      <div className="text-[10px] text-purple-700 dark:text-purple-300 font-bold">
+                        {realVoltage !== null ? "ĐIỆN ÁP PIN (INA219)" : "NGUỒN ĐIỆN VÀO"}
+                      </div>
                       <div className="text-xl font-black font-mono text-purple-600 mt-0.5">{paramValue} V</div>
+                      <div className="text-[9px] text-purple-600/80 font-bold">
+                        {paramValue >= 7.0 && paramValue <= 8.5
+                          ? "🔋 2 viên 18650"
+                          : paramValue >= 3.5 && paramValue <= 4.3
+                          ? "🔋 1 viên 18650"
+                          : "Nguồn thí nghiệm"}
+                      </div>
                     </div>
                     <div className="h-0.5 w-16 bg-purple-400" />
                     <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-300 text-center">
@@ -1705,24 +1744,57 @@ export default function VernierIoTPage() {
                 <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
                   <span className="text-[10px] font-bold text-slate-500 uppercase mr-1">Mốc chuẩn nhanh:</span>
                   {(activeExp === "ultrasonic"
-                    ? [15, 20, 30, 40, 50, 60, 80]
+                    ? [
+                        { val: 15, label: "15 cm" },
+                        { val: 20, label: "20 cm" },
+                        { val: 30, label: "30 cm" },
+                        { val: 40, label: "40 cm" },
+                        { val: 50, label: "50 cm" },
+                        { val: 60, label: "60 cm" },
+                        { val: 80, label: "80 cm" },
+                      ]
                     : activeExp === "sound"
-                    ? [10, 20, 34, 50, 68]
+                    ? [
+                        { val: 10, label: "10 cm" },
+                        { val: 20, label: "20 cm" },
+                        { val: 34, label: "34 cm" },
+                        { val: 50, label: "50 cm" },
+                        { val: 68, label: "68 cm" },
+                      ]
                     : activeExp === "force"
-                    ? [2, 4, 6, 8, 10]
-                    : [3, 5, 6, 9, 12]
+                    ? [
+                        { val: 2, label: "2 cm" },
+                        { val: 4, label: "4 cm" },
+                        { val: 6, label: "6 cm" },
+                        { val: 8, label: "8 cm" },
+                        { val: 10, label: "10 cm" },
+                      ]
+                    : [
+                        { val: 7.4, label: "7.4V (2x 18650)" },
+                        { val: 8.4, label: "8.4V (2x 18650 Đầy)" },
+                        { val: 3.7, label: "3.7V (1x 18650)" },
+                        { val: 5.0, label: "5V (USB)" },
+                        { val: 6.0, label: "6V (4x AA)" },
+                        { val: 9.0, label: "9V (Pin vuông)" },
+                        { val: 12.0, label: "12V (Ắc quy)" },
+                      ]
                   ).map((preset) => (
                     <button
-                      key={preset}
+                      key={preset.val}
                       type="button"
-                      onClick={() => handleParamChange(preset)}
+                      onClick={() => {
+                        handleParamChange(preset.val);
+                        if (activeExp === "ohm") {
+                          setAutoSyncOhmVoltage(false);
+                        }
+                      }}
                       className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all ${
-                        paramValue === preset
+                        Math.abs(paramValue - preset.val) < 0.05
                           ? "bg-sky-600 text-white shadow-xs"
                           : "bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                       }`}
                     >
-                      {preset} {exp.paramUnit}
+                      {preset.label}
                     </button>
                   ))}
                   {activeExp === "ultrasonic" && (
@@ -1731,6 +1803,54 @@ export default function VernierIoTPage() {
                     </span>
                   )}
                 </div>
+
+                {/* Chế độ đồng bộ điện áp thực tế từ cảm biến INA219 (đặc biệt khi dùng 2 viên pin 18650) */}
+                {activeExp === "ohm" && (
+                  <div className="mt-2 pt-2 border-t border-dashed border-emerald-300 dark:border-emerald-800 flex items-center justify-between flex-wrap gap-2 bg-emerald-50/60 dark:bg-emerald-950/20 p-2 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                        Nguồn 2x Pin 18650 đo bởi INA219:{" "}
+                        <span className="font-mono font-extrabold text-sm text-emerald-600 dark:text-emerald-400">
+                          {realVoltage !== null ? `${realVoltage.toFixed(2)} V` : "Chờ tín hiệu..."}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {realVoltage !== null && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setParamValue(parseFloat(realVoltage.toFixed(2)));
+                            setAutoSyncOhmVoltage(true);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                            autoSyncOhmVoltage
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100"
+                          }`}
+                        >
+                          ⚡ {autoSyncOhmVoltage ? "Đang tự động bám nguồn pin" : "Đồng bộ điện áp pin ngay"}
+                        </button>
+                      )}
+                      <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={autoSyncOhmVoltage}
+                          onChange={(e) => {
+                            setAutoSyncOhmVoltage(e.target.checked);
+                            if (e.target.checked && realVoltage !== null) {
+                              setParamValue(parseFloat(realVoltage.toFixed(2)));
+                            }
+                          }}
+                          className="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        />
+                        <span className="font-medium">Tự động bám U nguồn pin thực tế</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
