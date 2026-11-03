@@ -671,6 +671,25 @@ export default function VernierIoTPage() {
   const [realVoltage, setRealVoltage] = useState<number | null>(null);
   const [autoSyncOhmVoltage, setAutoSyncOhmVoltage] = useState<boolean>(true);
 
+  // Chế độ mô phỏng: "manual" (Tự thao tác tay thực hành) vs "auto" (Tự động phát liên tục)
+  const [simModeType, setSimModeType] = useState<"manual" | "auto">("manual");
+
+  // State cho bài 2 Cổng quang điện: Tự tay thả xe lăn
+  const [isCarRolling, setIsCarRolling] = useState<boolean>(false);
+  const [carProgress, setCarProgress] = useState<number>(0);
+
+  // State cho bài 3 Định luật Hooke: Treo quả nặng thủ công
+  const [hookeMassGrams, setHookeMassGrams] = useState<number>(100);
+
+  // State cho bài 4 Định luật Ôm: Khóa K và biến trở con chạy
+  const [circuitClosed, setCircuitClosed] = useState<boolean>(true);
+  const [rheostatOhm, setRheostatOhm] = useState<number>(0);
+
+  // State cho bài 1 Cảm biến âm thanh: Sử dụng Micro thật máy tính
+  const [isPcMicActive, setIsPcMicActive] = useState<boolean>(false);
+  const pcMicStreamRef = useRef<MediaStream | null>(null);
+  const pcAudioContextRef = useRef<AudioContext | null>(null);
+
   // Hàm gửi lệnh điều khiển 2 chiều qua Web Serial xuống vi điều khiển ESP32
   const sendSerialCommand = async (cmd: string) => {
     if (!serialPortRef.current || !serialPortRef.current.writable) return;
@@ -774,12 +793,214 @@ export default function VernierIoTPage() {
     }
   }, [activeExp]);
 
+  // 1. Tự tay thả xe lăn qua 2 cổng quang
+  const handleReleaseCar = () => {
+    if (isCarRolling) return;
+    setIsCarRolling(true);
+    setCarProgress(0);
+    setLastPhotogateRun(null);
+    setStatusMsg("🚗 Xe lăn bắt đầu xuất phát từ Cổng A qua Cổng B...");
+
+    const startTime = Date.now();
+    const duration = 1200; // 1.2s
+
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const pct = Math.min(100, (elapsed / duration) * 100);
+      setCarProgress(pct);
+
+      if (pct >= 100) {
+        clearInterval(timer);
+        setIsCarRolling(false);
+
+        const curTheory = theoryValueRef.current;
+        const noise = (Math.random() - 0.5) * 2.5;
+        const simSpeed = parseFloat(Math.max(10, curTheory + noise).toFixed(2));
+        const simTime = parseFloat((paramValue / simSpeed).toFixed(4));
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+        setLastPhotogateRun({
+          speed: simSpeed,
+          time: simTime,
+          timestamp: timeStr,
+        });
+        setCurrentLiveVal(simSpeed);
+
+        const err = curTheory > 0
+          ? parseFloat((Math.abs(simSpeed - curTheory) / curTheory * 100).toFixed(2))
+          : 0;
+
+        setTelemetryList((prev) => [
+          ...prev.slice(-35),
+          {
+            time: simTime,
+            measured: simSpeed,
+            theory: parseFloat(curTheory.toFixed(2)),
+            errorPct: err,
+          },
+        ]);
+
+        setStatusMsg(`🎉 Xe đã qua Cổng B: v = ${simSpeed} cm/s | t = ${simTime} s! Hãy bấm "Lưu Lượt Chạy".`);
+      }
+    }, 25);
+  };
+
+  // 2. Tự chọn quả nặng treo vào lò xo (Định luật Hooke)
+  const handleHookeWeightChange = (grams: number) => {
+    setHookeMassGrams(grams);
+    const mKg = grams / 1000.0;
+    const forceN = mKg * 9.8;
+    const deltaL_cm = parseFloat(((forceN / 50.0) * 100.0).toFixed(1));
+    handleParamChange(deltaL_cm);
+
+    const noise = (Math.random() - 0.5) * 0.04;
+    const measuredF = parseFloat(Math.max(0, forceN + noise).toFixed(2));
+    setCurrentLiveVal(measuredF);
+    setPeakForce(measuredF);
+
+    setTelemetryList((prev) => [
+      ...prev.slice(-35),
+      {
+        time: parseFloat(((prev.slice(-1)[0]?.time ?? 0) + 0.5).toFixed(1)),
+        measured: measuredF,
+        theory: parseFloat(forceN.toFixed(2)),
+        errorPct: parseFloat((Math.abs(measuredF - forceN) / (forceN || 1) * 100).toFixed(2)),
+      },
+    ]);
+    setStatusMsg(`Đã treo quả nặng ${grams}g: Lực đàn hồi F = ${measuredF} N, Độ dãn Δl = ${deltaL_cm} cm.`);
+  };
+
+  // 3. Tự gạt Khóa K và điều chỉnh Biến trở con chạy (Định luật Ôm)
+  const updateOhmCircuit = (closed: boolean, rOhm: number) => {
+    setCircuitClosed(closed);
+    setRheostatOhm(rOhm);
+    if (!closed) {
+      setCurrentLiveVal(0);
+      setStatusMsg("Đã ngắt Khóa K: Mạch điện hở, dòng điện I = 0.0 mA.");
+      return;
+    }
+    const totalR = 120.0 + rOhm;
+    const curU = paramValue;
+    const iTheoretical = (curU / totalR) * 1000.0;
+    const noise = (Math.random() - 0.5) * 0.8;
+    const iMeasured = parseFloat(Math.max(0, iTheoretical + noise).toFixed(1));
+    setCurrentLiveVal(iMeasured);
+
+    setTelemetryList((prev) => [
+      ...prev.slice(-35),
+      {
+        time: parseFloat(((prev.slice(-1)[0]?.time ?? 0) + 0.2).toFixed(1)),
+        measured: iMeasured,
+        theory: parseFloat(iTheoretical.toFixed(1)),
+        errorPct: parseFloat((Math.abs(iMeasured - iTheoretical) / (iTheoretical || 1) * 100).toFixed(2)),
+      },
+    ]);
+    setStatusMsg(`Đã đóng Khóa K: U = ${curU}V, Biến trở Rb = ${rOhm} Ω, Dòng điện I = ${iMeasured} mA.`);
+  };
+
+  // 4. Tự tạo tiếng động / gõ âm thanh
+  const handleSoundImpulse = () => {
+    const peakDb = parseFloat((70.0 + Math.random() * 18.0).toFixed(1));
+    setCurrentLiveVal(peakDb);
+    const curTheory = theoryValueRef.current;
+    setTelemetryList((prev) => [
+      ...prev.slice(-35),
+      {
+        time: parseFloat(((prev.slice(-1)[0]?.time ?? 0) + 0.1).toFixed(1)),
+        measured: peakDb,
+        theory: parseFloat(curTheory.toFixed(1)),
+        errorPct: parseFloat((Math.abs(peakDb - curTheory) / curTheory * 100).toFixed(2)),
+      },
+    ]);
+    setStatusMsg(`🔊 Đã phát xung âm thanh thử nghiệm: Đỉnh đo được ${peakDb} dB!`);
+
+    setTimeout(() => {
+      const ambientDb = parseFloat((curTheory + (Math.random() - 0.5) * 3.0).toFixed(1));
+      setCurrentLiveVal(ambientDb);
+    }, 600);
+  };
+
+  // 5. Bật/tắt Micro thật của laptop/máy tính
+  const togglePcMicrophone = async () => {
+    if (isPcMicActive) {
+      if (pcMicStreamRef.current) {
+        pcMicStreamRef.current.getTracks().forEach((track) => track.stop());
+        pcMicStreamRef.current = null;
+      }
+      if (pcAudioContextRef.current) {
+        pcAudioContextRef.current.close();
+        pcAudioContextRef.current = null;
+      }
+      setIsPcMicActive(false);
+      setStatusMsg("Đã tắt Micro máy tính.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      pcMicStreamRef.current = stream;
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      pcAudioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+
+      setIsPcMicActive(true);
+      setStatusMsg("🎙️ Micro laptop đang mở! Hãy nói hoặc vỗ tay để thử nghiệm sóng âm.");
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      let tSound = 0;
+      const micInterval = setInterval(() => {
+        if (!pcMicStreamRef.current) {
+          clearInterval(micInterval);
+          return;
+        }
+        analyser.getByteTimeDomainData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const val = (dataArray[i] - 128) / 128;
+          sum += val * val;
+        }
+        const rms = Math.sqrt(sum / bufferLength);
+        const measuredDb = parseFloat((45.0 + rms * 60.0).toFixed(1));
+        setCurrentLiveVal(measuredDb);
+
+        tSound += 0.1;
+        const curTheory = theoryValueRef.current;
+        setTelemetryList((prev) => [
+          ...prev.slice(-35),
+          {
+            time: parseFloat(tSound.toFixed(1)),
+            measured: measuredDb,
+            theory: parseFloat(curTheory.toFixed(1)),
+            errorPct: parseFloat((Math.abs(measuredDb - curTheory) / curTheory * 100).toFixed(2)),
+          },
+        ]);
+      }, 100);
+    } catch (err: any) {
+      alert("Không thể mở Micro: " + (err.message || "Hãy cấp quyền Micro trong trình duyệt."));
+    }
+  };
+
   // Simulation Loop when in "simulator" mode
   useEffect(() => {
     if (expMode !== "simulator" || !isRecording) return;
 
-    // 1. Đối với bài 2 Cổng quang điện (ultrasonic): Mô phỏng lượt thả xe lăn qua 2 cổng
-    if (activeExp === "ultrasonic") {
+    // Nếu ở chế độ TỰ THAO TÁC THỦ CÔNG: Người dùng chủ động bấm nút
+    if (simModeType === "manual") {
+      // Chỉ duy trì dao động nền nhẹ cho các bài liên tục nếu đang ghi nhận
+      if (activeExp === "ultrasonic") {
+        return; // Bài cổng quang chờ người dùng bấm "🚀 BẤM THẢ XE LĂN"
+      }
+    }
+
+    // 1. Đối với bài 2 Cổng quang điện khi ở chế độ TỰ ĐỘNG (auto)
+    if (activeExp === "ultrasonic" && simModeType === "auto") {
       const runSimPhotogate = () => {
         const curTheory = theoryValueRef.current;
         const simSpeed = parseFloat((curTheory + (Math.random() - 0.5) * 3.0).toFixed(2));
@@ -809,9 +1030,7 @@ export default function VernierIoTPage() {
         ]);
       };
 
-      // Chạy ngay 1 lượt ban đầu nếu chưa có dữ liệu
       runSimPhotogate();
-      // Và tiếp tục tự động thả xe lăn định kỳ mỗi 3.5 giây trong chế độ mô phỏng
       const interval = setInterval(runSimPhotogate, 3500);
       return () => clearInterval(interval);
     }
@@ -820,7 +1039,6 @@ export default function VernierIoTPage() {
     let t = 0;
     const interval = setInterval(() => {
       t += 0.1;
-      // Sensor noise (Gaussian simulation +/- 2.5%)
       const noise = (Math.random() - 0.5) * (theoryValue * 0.05 || 1.5);
       const measured = parseFloat(Math.max(0, theoryValue + noise).toFixed(2));
       setCurrentLiveVal(measured);
@@ -840,10 +1058,10 @@ export default function VernierIoTPage() {
           errorPct: errorPct,
         },
       ]);
-    }, 150);
+    }, simModeType === "manual" ? 300 : 150);
 
     return () => clearInterval(interval);
-  }, [expMode, isRecording, theoryValue, activeExp, paramValue]);
+  }, [expMode, isRecording, theoryValue, activeExp, paramValue, simModeType]);
 
   // Web Serial API handler
   const handleConnectSerial = async () => {
@@ -1666,7 +1884,11 @@ export default function VernierIoTPage() {
                       <span className="text-[10px] font-black text-sky-600">CỔNG A</span>
                       <span className="text-[8px] font-mono text-slate-500">GPIO 13</span>
                       <div className="w-3 h-12 bg-slate-800 rounded-sm mt-1 relative flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                        <div className={`w-1.5 h-1.5 rounded-full transition-all ${
+                          isCarRolling && carProgress < 20
+                            ? "bg-amber-400 scale-150 animate-ping"
+                            : "bg-red-500 animate-pulse"
+                        }`} />
                       </div>
                       <span className="text-[8px] font-bold text-sky-700 dark:text-sky-300 mt-1">Xuất phát</span>
                     </div>
@@ -1682,16 +1904,24 @@ export default function VernierIoTPage() {
                         </div>
                         {/* Xe lăn có cờ chắn sáng */}
                         <div
-                          className="absolute -top-7 -translate-x-1/2 flex flex-col items-center transition-all duration-100"
-                          style={{ left: `${Math.min(90, Math.max(10, ((latestVal || 35) / 70) * 100))}%` }}
+                          className="absolute -top-7 -translate-x-1/2 flex flex-col items-center transition-all duration-75"
+                          style={{
+                            left: isCarRolling
+                              ? `${8 + carProgress * 0.82}%`
+                              : lastPhotogateRun
+                              ? `90%`
+                              : `10%`
+                          }}
                         >
                           {/* Cờ chắn sáng */}
-                          <div className="w-1 h-4 bg-slate-900 dark:bg-white" />
-                          <div className="w-12 h-6 bg-amber-500 rounded-md shadow-md border border-amber-600 flex items-center justify-center text-white text-[9px] font-bold">
+                          <div className={`w-1 h-4 transition-all ${isCarRolling ? "bg-amber-600 animate-pulse" : "bg-slate-900 dark:bg-white"}`} />
+                          <div className={`w-12 h-6 rounded-md shadow-md border flex items-center justify-center text-white text-[9px] font-bold transition-all ${
+                            isCarRolling ? "bg-amber-600 border-amber-700 scale-105" : "bg-amber-500 border-amber-600"
+                          }`}>
                             Xe lăn
                           </div>
                           <span className="font-mono text-[9px] font-bold text-amber-700 dark:text-amber-300 mt-0.5">
-                            v = {latestVal} cm/s
+                            {isCarRolling ? "Đang lăn..." : `v = ${latestVal} cm/s`}
                           </span>
                         </div>
                       </div>
@@ -1702,7 +1932,11 @@ export default function VernierIoTPage() {
                       <span className="text-[10px] font-black text-emerald-600">CỔNG B</span>
                       <span className="text-[8px] font-mono text-slate-500">GPIO 25</span>
                       <div className="w-3 h-12 bg-slate-800 rounded-sm mt-1 relative flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                        <div className={`w-1.5 h-1.5 rounded-full transition-all ${
+                          isCarRolling && carProgress > 80
+                            ? "bg-emerald-400 scale-150 animate-ping"
+                            : "bg-red-500 animate-pulse"
+                        }`} />
                       </div>
                       <span className="text-[8px] font-bold text-emerald-600 mt-1">Về đích</span>
                     </div>
@@ -1757,6 +1991,205 @@ export default function VernierIoTPage() {
                   </div>
                 )}
               </div>
+
+              {/* BẢNG ĐIỀU KHIỂN TỰ LÀM THÍ NGHIỆM ẢO THỦ CÔNG (HANDS-ON LAB SIMULATION) */}
+              {expMode === "simulator" && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50/50 to-sky-50 dark:from-purple-950/40 dark:via-indigo-950/30 dark:to-sky-950/40 border-2 border-purple-300 dark:border-purple-800 flex flex-col gap-3 text-xs shadow-xs">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-purple-600 text-white font-black text-xs shadow-xs">🖐️</span>
+                      <span className="font-extrabold text-sm text-purple-950 dark:text-purple-200">
+                        BẢNG ĐIỀU KHIỂN TỰ THỰC HÀNH ẢO (HANDS-ON INTERACTIVE LAB)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 p-1 bg-white/90 dark:bg-slate-900/90 rounded-xl border border-purple-200 dark:border-purple-800">
+                      <button
+                        type="button"
+                        onClick={() => setSimModeType("manual")}
+                        className={`px-3 py-1 rounded-lg font-bold text-xs transition-all flex items-center gap-1 ${
+                          simModeType === "manual"
+                            ? "bg-purple-600 text-white shadow-xs"
+                            : "text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900"
+                        }`}
+                      >
+                        <span>🖐️ Tự tay thao tác</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSimModeType("auto")}
+                        className={`px-3 py-1 rounded-lg font-bold text-xs transition-all flex items-center gap-1 ${
+                          simModeType === "auto"
+                            ? "bg-purple-600 text-white shadow-xs"
+                            : "text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900"
+                        }`}
+                      >
+                        <span>🔄 Máy tự động chạy</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 1. ĐỐI VỚI BÀI 2: 2 CỔNG QUANG ĐIỆN */}
+                  {activeExp === "ultrasonic" && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-xl shadow-xs ${
+                          isCarRolling ? "bg-amber-500 text-white animate-bounce" : "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
+                        }`}>
+                          🚗
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                            {isCarRolling ? "Xe đang lăn trên máng dốc qua 2 cổng..." : "Xe đang chờ ở vạch xuất phát Cổng A"}
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            Khoảng cách giữa 2 cổng: <strong className="font-mono text-sky-600">s = {paramValue} cm</strong>. Bấm nút bên phải để thả xe!
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button
+                          type="button"
+                          disabled={isCarRolling}
+                          onClick={handleReleaseCar}
+                          className={`px-4 py-2.5 rounded-xl font-black text-xs shadow-md transition-all flex items-center gap-2 ${
+                            isCarRolling
+                              ? "bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed"
+                              : "bg-sky-600 hover:bg-sky-700 text-white active:scale-95 ring-2 ring-sky-500/20"
+                          }`}
+                        >
+                          <span>🚀 BẤM THẢ XE LĂN</span>
+                        </button>
+                        {lastPhotogateRun && (
+                          <button
+                            type="button"
+                            onClick={() => handleSaveSnapshot(lastPhotogateRun.speed)}
+                            className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs flex items-center gap-1.5"
+                          >
+                            <span>📸 Lưu Lượt Chạy ({lastPhotogateRun.speed} cm/s)</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. ĐỐI VỚI BÀI 3: ĐỊNH LUẬT HOOKE (LÒ XO & LOADCELL) */}
+                  {activeExp === "force" && (
+                    <div className="flex flex-col gap-2.5 p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="font-bold text-slate-800 dark:text-slate-100">
+                          Tự chọn quả nặng móc vào đầu lò xo (k = 50 N/m):
+                        </span>
+                        <span className="font-mono font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded-md">
+                          Quả nặng: {hookeMassGrams}g → Lực F = {latestVal} N (Δl = {paramValue} cm)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {[50, 100, 150, 200, 300, 500].map((g) => (
+                          <button
+                            key={g}
+                            type="button"
+                            onClick={() => handleHookeWeightChange(g)}
+                            className={`px-3 py-1.5 rounded-lg font-mono font-bold text-xs transition-all ${
+                              hookeMassGrams === g
+                                ? "bg-amber-500 text-white shadow-xs scale-105 ring-2 ring-amber-400"
+                                : "bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                            }`}
+                          >
+                            🪨 Móc {g}g ({(g * 0.0098).toFixed(2)}N)
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => handleSaveSnapshot()}
+                          className="ml-auto px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
+                        >
+                          <span>📸 Lưu Điểm Đo Này</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. ĐỐI VỚI BÀI 4: ĐỊNH LUẬT ÔM (KHÓA K & BIẾN TRỞ) */}
+                  {activeExp === "ohm" && (
+                    <div className="flex flex-col gap-3 p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updateOhmCircuit(!circuitClosed, rheostatOhm)}
+                            className={`px-4 py-2 rounded-xl font-black text-xs transition-all flex items-center gap-2 shadow-xs ${
+                              circuitClosed
+                                ? "bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-500/20"
+                                : "bg-red-600 hover:bg-red-700 text-white"
+                            }`}
+                          >
+                            <span>{circuitClosed ? "🟢 KHÓA K ĐANG ĐÓNG (MẠCH KÍN)" : "🔴 KHÓA K ĐANG MỞ (NGẮT ĐIỆN)"}</span>
+                          </button>
+                        </div>
+                        <span className="font-mono font-extrabold text-sm text-purple-600 bg-purple-50 dark:bg-purple-950 px-2.5 py-1 rounded-lg">
+                          {circuitClosed ? `I = ${(paramValue / (120 + rheostatOhm) * 1000).toFixed(1)} mA` : "I = 0.0 mA"}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+                        <span className="text-slate-600 dark:text-slate-400 shrink-0 font-medium">
+                          Biến trở con chạy $R_b$: <strong className="font-mono text-purple-600 text-sm">{rheostatOhm} Ω</strong>
+                        </span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={50}
+                          step={1}
+                          value={rheostatOhm}
+                          onChange={(e) => updateOhmCircuit(circuitClosed, parseInt(e.target.value))}
+                          className="flex-1 accent-purple-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
+                        />
+                        <span className="font-mono text-slate-400">50 Ω</span>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveSnapshot()}
+                          className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs shrink-0"
+                        >
+                          <span>📸 Lưu Điểm Đo</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 4. ĐỐI VỚI BÀI 1: CẢM BIẾN ÂM THANH */}
+                  {activeExp === "sound" && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={handleSoundImpulse}
+                          className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
+                        >
+                          <Volume2 className="w-4 h-4" />
+                          <span>🔊 Gõ Âm Thanh / Phát Còi (Tạo Xung)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={togglePcMicrophone}
+                          className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 ${
+                            isPcMicActive
+                              ? "bg-red-600 text-white ring-2 ring-red-400 shadow-sm"
+                              : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                          }`}
+                        >
+                          <span>{isPcMicActive ? "⏹ Tắt Micro Laptop" : "🎙️ Bật Micro Thật Máy Tính"}</span>
+                        </button>
+                      </div>
+
+                      <div className="text-[11px] text-slate-500">
+                        {isPcMicActive ? "🔴 Đang thu âm từ Micro laptop! Nói hoặc vỗ tay để thử." : "Bấm nút gõ âm thanh để xem cảm biến phản ứng theo mức Decibel."}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Parameter control slider with exact Number Input & Quick Presets */}
               <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs flex flex-col gap-2.5">
