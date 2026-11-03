@@ -705,6 +705,21 @@ export default function VernierIoTPage() {
   // Latest measured value (from telemetry list, or live fallback, or 0)
   const latestVal = telemetryList.length > 0 ? (telemetryList.slice(-1)[0]?.measured ?? 0) : currentLiveVal;
 
+  // Thay đổi khoảng cách hoặc biến số thực nghiệm (đồng bộ 2 chiều với ESP32)
+  const handleParamChange = (newVal: number) => {
+    if (isNaN(newVal)) return;
+    setParamValue(newVal);
+    if (activeExp === "ultrasonic") {
+      sendSerialCommand(`DIST:${newVal}`);
+      // Nếu đã có lượt chạy trước đó, tính lại vận tốc theo quãng đường mới: v = s / t
+      if (lastPhotogateRun && lastPhotogateRun.time > 0) {
+        const recalculatedVel = parseFloat((newVal / lastPhotogateRun.time).toFixed(2));
+        setLastPhotogateRun((prev) => prev ? { ...prev, speed: recalculatedVel } : null);
+        setCurrentLiveVal(recalculatedVel);
+      }
+    }
+  };
+
   // Toggle Pause / Resume recording
   const toggleRecording = () => {
     const next = !isRecording;
@@ -871,10 +886,31 @@ export default function VernierIoTPage() {
               continue;
             }
 
+            // Đồng bộ khoảng cách s từ nút nhấn ESP32 lên Web
+            if (trimmed.includes(">> DIST:") || trimmed.includes("Da doi khoang cach s = ") || trimmed.includes("Da cap nhat khoang cach s = ")) {
+              const matchD = trimmed.match(/(?:DIST:|s\s*=\s*)([0-9]+(?:\.[0-9]+)?)/i);
+              if (matchD && matchD[1]) {
+                const newD = parseFloat(matchD[1]);
+                if (!isNaN(newD) && newD >= 5 && newD <= 200) {
+                  setParamValue(newD);
+                  setStatusMsg(`Hộp ESP32 đã đổi khoảng cách s = ${newD} cm!`);
+                  continue;
+                }
+              }
+            }
+
             // Bắt trọn vẹn kết quả lượt chạy 2 Cổng quang điện (Photogate)
             if (trimmed.includes("Van toc:") && trimmed.includes("Thoi gian t:")) {
               const matchVel = trimmed.match(/Van toc:\s*(-?\d+(?:\.\d+)?)/i);
               const matchTime = trimmed.match(/Thoi gian t:\s*(-?\d+(?:\.\d+)?)/i);
+              const matchS = trimmed.match(/s\s*=\s*(-?\d+(?:\.\d+)?)/i);
+              if (matchS && matchS[1]) {
+                const parsedS = parseFloat(matchS[1]);
+                if (!isNaN(parsedS) && parsedS >= 5) {
+                  setParamValue(parsedS);
+                }
+              }
+
               if (matchVel && matchTime) {
                 const speedVal = parseFloat(matchVel[1]);
                 const timeVal = parseFloat(matchTime[1]);
@@ -1627,23 +1663,74 @@ export default function VernierIoTPage() {
                 )}
               </div>
 
-              {/* Parameter control slider */}
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs">
-                <div className="flex justify-between font-bold mb-1.5">
-                  <span>Điều chỉnh biến số thực nghiệm: {exp.paramName}</span>
-                  <span className="font-mono text-sky-600 text-sm">
-                    {paramValue} {exp.paramUnit}
+              {/* Parameter control slider with exact Number Input & Quick Presets */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs flex flex-col gap-2.5">
+                <div className="flex items-center justify-between font-bold flex-wrap gap-2">
+                  <span className="text-slate-700 dark:text-slate-300">
+                    Cài đặt thông số: <strong>{exp.paramName}</strong>
                   </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-400">Giá trị:</span>
+                    <input
+                      type="number"
+                      min={exp.paramMin}
+                      max={exp.paramMax}
+                      step={activeExp === "ohm" ? 0.1 : 1}
+                      value={paramValue}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val)) handleParamChange(val);
+                      }}
+                      className="w-16 px-2 py-0.5 rounded-md border border-sky-300 dark:border-sky-700 bg-white dark:bg-slate-900 font-mono font-black text-sky-600 text-right text-sm"
+                    />
+                    <span className="font-mono text-sky-600 font-bold">{exp.paramUnit}</span>
+                  </div>
                 </div>
-                <input
-                  type="range"
-                  min={exp.paramMin}
-                  max={exp.paramMax}
-                  step={activeExp === "ohm" ? 0.1 : 1}
-                  value={paramValue}
-                  onChange={(e) => setParamValue(parseFloat(e.target.value))}
-                  className="w-full accent-sky-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
-                />
+
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[10px] text-slate-400">{exp.paramMin}{exp.paramUnit}</span>
+                  <input
+                    type="range"
+                    min={exp.paramMin}
+                    max={exp.paramMax}
+                    step={activeExp === "ohm" ? 0.1 : 1}
+                    value={paramValue}
+                    onChange={(e) => handleParamChange(parseFloat(e.target.value))}
+                    className="flex-1 accent-sky-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
+                  />
+                  <span className="font-mono text-[10px] text-slate-400">{exp.paramMax}{exp.paramUnit}</span>
+                </div>
+
+                {/* Quick Presets / Mốc chọn nhanh */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase mr-1">Mốc chuẩn nhanh:</span>
+                  {(activeExp === "ultrasonic"
+                    ? [15, 20, 30, 40, 50, 60, 80]
+                    : activeExp === "sound"
+                    ? [10, 20, 34, 50, 68]
+                    : activeExp === "force"
+                    ? [2, 4, 6, 8, 10]
+                    : [3, 5, 6, 9, 12]
+                  ).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handleParamChange(preset)}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all ${
+                        paramValue === preset
+                          ? "bg-sky-600 text-white shadow-xs"
+                          : "bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                      }`}
+                    >
+                      {preset} {exp.paramUnit}
+                    </button>
+                  ))}
+                  {activeExp === "ultrasonic" && (
+                    <span className="text-[10px] text-slate-400 ml-auto italic">
+                      * Thay đổi khoảng cách sẽ tự động đồng bộ xuống màn hình OLED & vi điều khiển ESP32
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 

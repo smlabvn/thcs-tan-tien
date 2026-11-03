@@ -45,7 +45,7 @@ const int MIC_PIN = 35; // GPIO 35 (ADC1)
 // Chân 2 Cổng quang điện hồng ngoại
 const int GATE_A_PIN = 13; // Cổng A
 const int GATE_B_PIN = 25; // Cổng B
-const float DISTANCE_S_CM = 30.0; // Khoảng cách giữa 2 cổng (cm)
+float distance_s_cm = 30.0; // Khoảng cách giữa 2 cổng (cm) - Có thể thay đổi từ Web hoặc Nút 1!
 
 // Chân Loadcell 5kg + HX711
 const int LOADCELL_DOUT = 26;
@@ -229,6 +229,15 @@ void checkSerialCommands() {
         forceHold = !forceHold;
         if (forceHold) holdForceVal = peakForce;
         Serial.println(forceHold ? F(">> [HOLD]: Da khoa gia tri luc!") : F(">> [UNHOLD]: Da mo khoa!"));
+      }
+    } else if (cmd.startsWith("DIST:") || cmd.startsWith("dist:") || cmd.startsWith("S:") || cmd.startsWith("s:")) {
+      int colonIdx = cmd.indexOf(':');
+      float newDist = cmd.substring(colonIdx + 1).toFloat();
+      if (newDist >= 5.0 && newDist <= 200.0) {
+        distance_s_cm = newDist;
+        Serial.print(F(">> [DIST]: Da cap nhat khoang cach s = "));
+        Serial.print(distance_s_cm, 1);
+        Serial.println(F(" cm"));
       }
     }
   }
@@ -423,26 +432,43 @@ void loopSoundExperiment() {
   }
 }
 
-// ================= [BÀI 2]: 2 CỔNG QUANG ĐIỆN =================
+// ================= [BÀI 2]: 2 CỔNG QUANG ĐIỆN (KHOẢNG CÁCH s THAY ĐỔI ĐƯỢC) =================
 void loopPhotogateExperiment() {
-  // Nút 1: Đặt lại lượt mới
+  // Nút 1: Đổi khoảng cách s (khi xe chưa chạy) HOẶC Đặt lại lượt mới (sau khi xe đã chạy xong)
   if (digitalRead(BTN_OK) == LOW) {
     delay(40);
     if (digitalRead(BTN_OK) == LOW) {
-      passA = false;
-      passB = false;
-      timeA_us = 0;
-      timeB_us = 0;
-      photogateReported = false;
-      lastRecordedVel = 0.0;
-      lastRecordedTime = 0.0;
-      Serial.println(F(">> [RESET]: San sang cho luot tha xe moi!"));
-      if (oledOK) {
-        display.clearDisplay();
-        display.setTextSize(1);
-        display.setCursor(15, 26);
-        display.println(F("SAN SANG DO..."));
-        display.display();
+      if (passA || passB || photogateReported) {
+        // Đã chạy xong lượt: Bấm Nút 1 để sẵn sàng cho lượt mới
+        passA = false;
+        passB = false;
+        timeA_us = 0;
+        timeB_us = 0;
+        photogateReported = false;
+        lastRecordedVel = 0.0;
+        lastRecordedTime = 0.0;
+        Serial.println(F(">> [RESET]: San sang cho luot tha xe moi!"));
+        if (oledOK) {
+          display.clearDisplay();
+          display.setTextSize(1);
+          display.setCursor(15, 26);
+          display.println(F("SAN SANG DO..."));
+          display.display();
+        }
+      } else {
+        // Đang chờ thả xe: Bấm Nút 1 để THAY ĐỔI KHOẢNG CÁCH s (20 -> 30 -> 40 -> 50 -> 60 -> 80 -> 20cm)!
+        if (distance_s_cm < 29.0) distance_s_cm = 30.0;
+        else if (distance_s_cm < 39.0) distance_s_cm = 40.0;
+        else if (distance_s_cm < 49.0) distance_s_cm = 50.0;
+        else if (distance_s_cm < 59.0) distance_s_cm = 60.0;
+        else if (distance_s_cm < 79.0) distance_s_cm = 80.0;
+        else distance_s_cm = 20.0;
+
+        Serial.print(F(">> DIST:"));
+        Serial.println(distance_s_cm, 1);
+        Serial.print(F(">> [DIST]: Da doi khoang cach s = "));
+        Serial.print(distance_s_cm, 1);
+        Serial.println(F(" cm"));
       }
       while (digitalRead(BTN_OK) == LOW) delay(10);
     }
@@ -452,7 +478,7 @@ void loopPhotogateExperiment() {
     if (!photogateReported) {
       unsigned long delta_us = timeB_us - timeA_us;
       lastRecordedTime = delta_us / 1000000.0;
-      lastRecordedVel = (lastRecordedTime > 0.0001) ? (DISTANCE_S_CM / lastRecordedTime) : 0;
+      lastRecordedVel = (lastRecordedTime > 0.0001) ? (distance_s_cm / lastRecordedTime) : 0;
       photogateReported = true;
 
       // In kết quả rõ ràng chốt 1 lần để Web Serial bắt trọn vẹn
@@ -460,7 +486,9 @@ void loopPhotogateExperiment() {
       Serial.print(lastRecordedVel, 2);
       Serial.print(F(" cm/s  |  Thoi gian t: "));
       Serial.print(lastRecordedTime, 4);
-      Serial.println(F(" s"));
+      Serial.print(F(" s  |  s = "));
+      Serial.print(distance_s_cm, 1);
+      Serial.println(F(" cm"));
     }
 
     if (oledOK) {
@@ -475,7 +503,7 @@ void loopPhotogateExperiment() {
 
       display.setTextSize(1);
       display.setCursor(0, 38);
-      display.printf("t = %.4f s", lastRecordedTime);
+      display.printf("t=%.3fs | s=%.0fcm", lastRecordedTime, distance_s_cm);
       display.setCursor(0, 52);
       display.printf("N1:Luot moi | N2:Menu");
       display.display();
@@ -500,12 +528,14 @@ void loopPhotogateExperiment() {
       display.setTextSize(1);
       display.setCursor(0, 0);
       display.print(F("TOC DO IR | [N2:Menu]"));
-      display.setCursor(0, 22);
+      display.setCursor(0, 18);
       display.println(F("SAN SANG: THA XE"));
-      display.setCursor(0, 38);
-      display.printf("s = %.1f cm (A->B)", DISTANCE_S_CM);
+      display.setTextSize(2);
+      display.setCursor(0, 32);
+      display.printf("s = %.0f cm", distance_s_cm);
+      display.setTextSize(1);
       display.setCursor(0, 52);
-      display.println(F("N1:Reset | N2:Ve Menu"));
+      display.println(F("N1:Doi s   N2:Ve Menu"));
       display.display();
     }
   }

@@ -23,8 +23,8 @@ const int GATE_B_PIN = 25; // Cổng quang B (Vị trí 2) nối GPIO 25
 const int BTN_START  = 18; // Nút 1: Bắt đầu / Tạm dừng
 const int BTN_RESET  = 19; // Nút 2: Đặt lại đo lượt mới
 
-// Khoảng cách thực tế giữa 2 cổng quang trên máng nghiêng (cm)
-const float DISTANCE_S_CM = 30.0; // 30 cm = 0.3 m
+// Khoảng cách thực tế giữa 2 cổng quang trên máng nghiêng (cm) - Có thể thay đổi được!
+float distance_s_cm = 30.0; // Mặc định 30 cm (có thể đổi qua Web Serial hoặc Nút nhấn)
 
 volatile unsigned long timeA_us = 0;
 volatile unsigned long timeB_us = 0;
@@ -115,7 +115,7 @@ void loop() {
     }
   }
 
-  // Lệnh Reset từ Web Serial
+  // Lệnh Reset & Thay đổi khoảng cách từ Web Serial
   if (Serial.available() > 0) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
@@ -128,6 +128,15 @@ void loop() {
       lastSpeed = 0.0;
       lastTime = 0.0;
       Serial.println(F(">> [RESET]: Da dat lai san sang cho luot tha xe moi!"));
+    } else if (cmd.startsWith("DIST:") || cmd.startsWith("dist:") || cmd.startsWith("S:") || cmd.startsWith("s:")) {
+      int colonIdx = cmd.indexOf(':');
+      float newDist = cmd.substring(colonIdx + 1).toFloat();
+      if (newDist >= 5.0 && newDist <= 200.0) {
+        distance_s_cm = newDist;
+        Serial.print(F(">> [DIST]: Da cap nhat khoang cach s = "));
+        Serial.print(distance_s_cm, 1);
+        Serial.println(F(" cm"));
+      }
     }
   }
 
@@ -147,7 +156,7 @@ void loop() {
     if (!photogateReported) {
       unsigned long delta_us = timeB_us - timeA_us;
       lastTime = delta_us / 1000000.0; // Thời gian chuyển động (giây)
-      lastSpeed = (lastTime > 0.0001) ? (DISTANCE_S_CM / lastTime) : 0;
+      lastSpeed = (lastTime > 0.0001) ? (distance_s_cm / lastTime) : 0;
       photogateReported = true;
 
       // In kết quả đúng 1 lần duy nhất để Web bắt trọn vẹn, không lặp lại khi xe đã đỗ ở đích
@@ -156,7 +165,9 @@ void loop() {
         Serial.print(lastSpeed, 2);
         Serial.print(F(" cm/s  |  Thoi gian t: "));
         Serial.print(lastTime, 4);
-        Serial.println(F(" s"));
+        Serial.print(F(" s  |  s = "));
+        Serial.print(distance_s_cm, 1);
+        Serial.println(F(" cm"));
       }
     }
 
