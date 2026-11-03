@@ -77,6 +77,14 @@ volatile unsigned long timeA_us = 0;
 volatile unsigned long timeB_us = 0;
 volatile bool passA = false;
 volatile bool passB = false;
+bool photogateReported = false;
+float lastRecordedVel = 0.0;
+float lastRecordedTime = 0.0;
+
+// Biến hỗ trợ thí nghiệm Lực Loadcell (Bắt đỉnh Peak & Khóa lực Hold)
+float peakForce = 0.0;
+bool forceHold = false;
+float holdForceVal = 0.0;
 
 void IRAM_ATTR isrGateA() {
   if (currentState == STATE_EXP_PHOTOGATE && !passA) {
@@ -97,6 +105,7 @@ void showMenu();
 void handleMenuInput();
 void enterExperiment(int expId);
 void returnToMenu();
+void checkSerialCommands();
 void loopSoundExperiment();
 void loopPhotogateExperiment();
 void loopLoadcellExperiment();
@@ -152,6 +161,8 @@ void setup() {
 
 // ================= VÒNG LẶP CHÍNH (LOOP) =================
 void loop() {
+  checkSerialCommands();
+
   if (currentState == STATE_MENU) {
     handleMenuInput();
   } else {
@@ -181,6 +192,44 @@ void loop() {
         break;
       default:
         break;
+    }
+  }
+}
+
+// Xử lý lệnh từ Web Serial (RESET, TARE, HOLD)
+void checkSerialCommands() {
+  if (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd == "RESET") {
+      if (currentState == STATE_EXP_PHOTOGATE) {
+        passA = false;
+        passB = false;
+        timeA_us = 0;
+        timeB_us = 0;
+        photogateReported = false;
+        lastRecordedVel = 0.0;
+        lastRecordedTime = 0.0;
+        Serial.println(F(">> [RESET]: San sang cho luot tha xe moi!"));
+      } else if (currentState == STATE_EXP_LOADCELL) {
+        peakForce = 0.0;
+        forceHold = false;
+        scale.tare();
+        Serial.println(F(">> [TARE]: Da dua luc ke ve 0.00 N va reset dinh!"));
+      }
+    } else if (cmd == "TARE") {
+      if (currentState == STATE_EXP_LOADCELL) {
+        scale.tare();
+        peakForce = 0.0;
+        forceHold = false;
+        Serial.println(F(">> [TARE]: Da dua luc ke ve 0.00 N!"));
+      }
+    } else if (cmd == "HOLD") {
+      if (currentState == STATE_EXP_LOADCELL) {
+        forceHold = !forceHold;
+        if (forceHold) holdForceVal = peakForce;
+        Serial.println(forceHold ? F(">> [HOLD]: Da khoa gia tri luc!") : F(">> [UNHOLD]: Da mo khoa!"));
+      }
     }
   }
 }
@@ -253,12 +302,18 @@ void enterExperiment(int expId) {
     passB = false;
     timeA_us = 0;
     timeB_us = 0;
+    photogateReported = false;
+    lastRecordedVel = 0.0;
+    lastRecordedTime = 0.0;
     attachInterrupt(digitalPinToInterrupt(GATE_A_PIN), isrGateA, FALLING);
     attachInterrupt(digitalPinToInterrupt(GATE_B_PIN), isrGateB, FALLING);
     Serial.println(F("\n>> MODE:ultrasonic"));
     Serial.println(F(">> HE THONG 2 CONG QUANG DIEN KHOI DONG THANH CONG! <<"));
   } else if (expId == 3) {
     currentState = STATE_EXP_LOADCELL;
+    peakForce = 0.0;
+    forceHold = false;
+    holdForceVal = 0.0;
     if (scale.wait_ready_timeout(800)) {
       scale.set_scale(loadcell_calib);
       scale.tare();
@@ -378,6 +433,9 @@ void loopPhotogateExperiment() {
       passB = false;
       timeA_us = 0;
       timeB_us = 0;
+      photogateReported = false;
+      lastRecordedVel = 0.0;
+      lastRecordedTime = 0.0;
       Serial.println(F(">> [RESET]: San sang cho luot tha xe moi!"));
       if (oledOK) {
         display.clearDisplay();
@@ -391,35 +449,38 @@ void loopPhotogateExperiment() {
   }
 
   if (passA && passB) {
-    unsigned long delta_us = timeB_us - timeA_us;
-    float delta_t = delta_us / 1000000.0;
-    float vel = (delta_t > 0.0001) ? (DISTANCE_S_CM / delta_t) : 0;
+    if (!photogateReported) {
+      unsigned long delta_us = timeB_us - timeA_us;
+      lastRecordedTime = delta_us / 1000000.0;
+      lastRecordedVel = (lastRecordedTime > 0.0001) ? (DISTANCE_S_CM / lastRecordedTime) : 0;
+      photogateReported = true;
 
-    Serial.print(F("Van toc: "));
-    Serial.print(vel, 2);
-    Serial.print(F(" cm/s  |  Thoi gian t: "));
-    Serial.print(delta_t, 4);
-    Serial.println(F(" s"));
+      // In kết quả rõ ràng chốt 1 lần để Web Serial bắt trọn vẹn
+      Serial.print(F("Van toc: "));
+      Serial.print(lastRecordedVel, 2);
+      Serial.print(F(" cm/s  |  Thoi gian t: "));
+      Serial.print(lastRecordedTime, 4);
+      Serial.println(F(" s"));
+    }
 
     if (oledOK) {
       display.clearDisplay();
       display.setTextSize(1);
       display.setCursor(0, 0);
-      display.print(F("2 CONG QUANG | "));
-      display.print(F("[N2:Menu]"));
+      display.print(F("DA QUA 2 CONG! [N2]"));
 
       display.setCursor(0, 16);
       display.setTextSize(2);
-      display.printf("%.1f cm/s", vel);
+      display.printf("%.1f cm/s", lastRecordedVel);
 
       display.setTextSize(1);
       display.setCursor(0, 38);
-      display.printf("t = %.3f s", delta_t);
+      display.printf("t = %.4f s", lastRecordedTime);
       display.setCursor(0, 52);
-      display.printf("N1:Reset | N2:Menu");
+      display.printf("N1:Luot moi | N2:Menu");
       display.display();
     }
-    delay(200);
+    delay(100);
   } else if (passA && !passB) {
     if (oledOK) {
       display.clearDisplay();
@@ -451,19 +512,35 @@ void loopPhotogateExperiment() {
   delay(40);
 }
 
-// ================= [BÀI 3]: LỰC KẾ LOADCELL 5KG =================
+// ================= [BÀI 3]: LỰC KẾ LOADCELL 5KG (BẮT ĐỈNH & KHÓA SỐ ĐO) =================
 void loopLoadcellExperiment() {
-  // Nút 1: TARE về 0
+  // Nút 1: Khóa giá trị (HOLD) khi có lực, hoặc TARE về 0 khi không có lực
   if (digitalRead(BTN_OK) == LOW) {
     delay(40);
     if (digitalRead(BTN_OK) == LOW) {
-      scale.tare();
-      Serial.println(F(">> [TARE]: Da dua luc ke ve 0.00 N!"));
+      if (forceHold) {
+        forceHold = false;
+        Serial.println(F(">> [UNHOLD]: Da mo khoa luc ke!"));
+      } else {
+        if (peakForce > 0.15) {
+          forceHold = true;
+          holdForceVal = peakForce;
+          Serial.print(F(">> [HOLD]: Da khoa gia tri luc dinh: "));
+          Serial.print(holdForceVal, 2);
+          Serial.println(F(" N"));
+        } else {
+          scale.tare();
+          peakForce = 0.0;
+          Serial.println(F(">> [TARE]: Da dua luc ke ve 0.00 N!"));
+        }
+      }
+
       if (oledOK) {
         display.clearDisplay();
         display.setTextSize(1);
-        display.setCursor(20, 28);
-        display.println(F(">> DA TARE VE 0 <<"));
+        display.setCursor(15, 26);
+        if (forceHold) display.printf("KHOA: %.2f N", holdForceVal);
+        else display.println(F(">> DA TARE VE 0 <<"));
         display.display();
       }
       delay(250);
@@ -474,12 +551,21 @@ void loopLoadcellExperiment() {
   if (scale.is_ready()) {
     float grams = scale.get_units(2);
     if (grams < 0 && grams > -1.5) grams = 0;
-    float force_N = (grams / 1000.0) * 9.80665;
-    if (force_N < 0) force_N = 0;
+    float liveForce_N = (grams / 1000.0) * 9.80665;
+    if (liveForce_N < 0) liveForce_N = 0;
+
+    // Tự động ghi nhận đỉnh lực cực đại (Peak Force) khi kéo lò xo
+    if (liveForce_N > peakForce) {
+      peakForce = liveForce_N;
+    }
+
+    float displayForce = forceHold ? holdForceVal : liveForce_N;
 
     if (isRunning) {
       Serial.print(F("Luc: "));
-      Serial.print(force_N, 2);
+      Serial.print(displayForce, 2);
+      Serial.print(F(" N  |  Dinh: "));
+      Serial.print(peakForce, 2);
       Serial.print(F(" N  |  m = "));
       Serial.print(grams, 1);
       Serial.println(F(" g"));
@@ -489,18 +575,18 @@ void loopLoadcellExperiment() {
       display.clearDisplay();
       display.setTextSize(1);
       display.setCursor(0, 0);
-      display.print(F("LUC KE | [N2:Menu]"));
+      display.print(forceHold ? F("LUC [DA KHOA] | [N2]") : F("LUC KE | [N2:Menu]"));
 
       display.setCursor(0, 16);
       display.setTextSize(2);
-      display.printf("%.2f N", force_N);
+      display.printf("%.2f N", displayForce);
 
       display.setTextSize(1);
       display.setCursor(0, 38);
-      display.printf("m = %.1f g", grams);
+      display.printf("Dinh(Max): %.2f N", peakForce);
 
       display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
-      int barW = map((int)(force_N * 10), 0, 100, 0, 124);
+      int barW = map((int)(displayForce * 10), 0, 100, 0, 124);
       if (barW > 124) barW = 124;
       if (barW < 0) barW = 0;
       display.fillRect(2, 54, barW, 7, SSD1306_WHITE);
