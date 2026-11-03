@@ -49,6 +49,9 @@ void IRAM_ATTR isrGateB() {
 
 bool isRunning = true;
 bool oledFound = false;
+bool photogateReported = false;
+float lastSpeed = 0.0;
+float lastTime = 0.0;
 
 void setup() {
   Serial.begin(115200);
@@ -97,6 +100,9 @@ void loop() {
       passB = false;
       timeA_us = 0;
       timeB_us = 0;
+      photogateReported = false;
+      lastSpeed = 0.0;
+      lastTime = 0.0;
       Serial.println(F(">> [RESET]: Da dat lai san sang cho luot tha xe moi!"));
       if (oledFound) {
         display.clearDisplay();
@@ -106,6 +112,22 @@ void loop() {
         display.display();
       }
       while (digitalRead(BTN_RESET) == LOW) delay(10);
+    }
+  }
+
+  // Lệnh Reset từ Web Serial
+  if (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd == "RESET") {
+      passA = false;
+      passB = false;
+      timeA_us = 0;
+      timeB_us = 0;
+      photogateReported = false;
+      lastSpeed = 0.0;
+      lastTime = 0.0;
+      Serial.println(F(">> [RESET]: Da dat lai san sang cho luot tha xe moi!"));
     }
   }
 
@@ -122,22 +144,20 @@ void loop() {
 
   // 3. Xử lý khi xe đã đi qua cả 2 cổng quang A và B
   if (passA && passB) {
-    unsigned long delta_us = timeB_us - timeA_us;
-    float delta_t_sec = delta_us / 1000000.0; // Thời gian chuyển động (giây)
+    if (!photogateReported) {
+      unsigned long delta_us = timeB_us - timeA_us;
+      lastTime = delta_us / 1000000.0; // Thời gian chuyển động (giây)
+      lastSpeed = (lastTime > 0.0001) ? (DISTANCE_S_CM / lastTime) : 0;
+      photogateReported = true;
 
-    // Tính tốc độ trung bình: v = s / t (cm/s)
-    float velocity_cm_s = 0;
-    if (delta_t_sec > 0.0001) {
-      velocity_cm_s = DISTANCE_S_CM / delta_t_sec;
-    }
-
-    // Gửi kết quả lên Web PhysiX qua cổng USB Serial
-    if (isRunning) {
-      Serial.print(F("Van toc: "));
-      Serial.print(velocity_cm_s, 2);
-      Serial.print(F(" cm/s  |  Thoi gian t: "));
-      Serial.print(delta_t_sec, 4);
-      Serial.println(F(" s"));
+      // In kết quả đúng 1 lần duy nhất để Web bắt trọn vẹn, không lặp lại khi xe đã đỗ ở đích
+      if (isRunning) {
+        Serial.print(F("Van toc: "));
+        Serial.print(lastSpeed, 2);
+        Serial.print(F(" cm/s  |  Thoi gian t: "));
+        Serial.print(lastTime, 4);
+        Serial.println(F(" s"));
+      }
     }
 
     // Hiển thị trực quan trên OLED SSD1306
@@ -145,25 +165,23 @@ void loop() {
       display.clearDisplay();
       display.setTextSize(1);
       display.setCursor(0, 0);
-      display.print(F("2 CONG QUANG | "));
-      display.print(isRunning ? F("RUN") : F("PAUSE"));
+      display.print(F("DA QUA 2 CONG!"));
 
       display.setCursor(0, 16);
       display.setTextSize(2);
-      display.printf("%.1f cm/s", velocity_cm_s);
+      display.printf("%.1f cm/s", lastSpeed);
 
       display.setTextSize(1);
       display.setCursor(0, 38);
-      display.printf("t = %.3f s", delta_t_sec);
+      display.printf("t = %.4f s", lastTime);
 
       display.setCursor(0, 50);
-      display.printf("s = %.1f cm (A->B)", DISTANCE_S_CM);
+      display.print(F("N2: Luot moi"));
 
       display.display();
     }
 
-    // Giữ kết quả hiển thị một chút
-    delay(300);
+    delay(100);
   } else if (passA && !passB) {
     // Đã qua cổng A, đang chờ tới cổng B
     if (oledFound) {

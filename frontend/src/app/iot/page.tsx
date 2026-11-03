@@ -740,7 +740,8 @@ export default function VernierIoTPage() {
 
   // Simulation Loop when in "simulator" mode
   useEffect(() => {
-    if (expMode !== "simulator" || connectionType !== "simulator" || !isRecording) return;
+    // Không chạy vòng lặp cộng dồn thời gian nếu đang ở bài Cổng quang (vì cổng quang đo theo từng lượt xe chạy)
+    if (expMode !== "simulator" || connectionType !== "simulator" || !isRecording || activeExp === "ultrasonic") return;
 
     let t = 0;
     const interval = setInterval(() => {
@@ -879,13 +880,39 @@ export default function VernierIoTPage() {
                 const timeVal = parseFloat(matchTime[1]);
                 const now = new Date();
                 const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-                setLastPhotogateRun({
-                  speed: speedVal,
-                  time: timeVal,
-                  timestamp: timeStr,
+
+                // Kiểm tra chống nhận trùng lượt (khi ESP32 gửi lại cùng 1 kết quả)
+                setLastPhotogateRun((prevRun) => {
+                  if (prevRun && Math.abs(prevRun.speed - speedVal) < 0.001 && Math.abs(prevRun.time - timeVal) < 0.0001) {
+                    return prevRun; // Đã nhận lượt này rồi -> KHÔNG thêm dòng mới vào bảng!
+                  }
+
+                  const curTheory = theoryValueRef.current;
+                  const err = curTheory > 0
+                    ? parseFloat((Math.abs(speedVal - curTheory) / curTheory * 100).toFixed(2))
+                    : 0;
+
+                  // Thêm ĐÚNG 1 ĐIỂM cho lượt chạy này vào bảng với thời gian t thực tế xe chạy
+                  setTelemetryList((prev) => [
+                    ...prev.slice(-35),
+                    {
+                      time: timeVal, // Thời gian thực tế xe di chuyển qua 2 cổng!
+                      measured: speedVal,
+                      theory: parseFloat(curTheory.toFixed(2)),
+                      errorPct: err,
+                    },
+                  ]);
+
+                  return {
+                    speed: speedVal,
+                    time: timeVal,
+                    timestamp: timeStr,
+                  };
                 });
+
                 setCurrentLiveVal(speedVal);
                 setStatusMsg(`🎉 Đã bắt trọn lượt chạy: v = ${speedVal} cm/s | t = ${timeVal} s! Bấm "Lưu Lượt Chạy" để ghi vào bảng.`);
+                continue; // QUAN TRỌNG: Đã chốt lượt, KHÔNG để rơi xuống đoạn t += 0.1 rolling bên dưới!
               }
             }
 
@@ -926,6 +953,19 @@ export default function VernierIoTPage() {
 
               // If paused by student, do NOT append to rolling graph so readings stay frozen for inspection
               if (!isRecordingRef.current) {
+                continue;
+              }
+
+              // QUAN TRỌNG:
+              // 1. Với bài 2 Cổng quang điện (ultrasonic): Đây là bài đo theo từng lượt xe chạy.
+              // Khi xe không chạy (chưa thả hoặc đã dừng ở cuối dốc), TUYỆT ĐỐI KHÔNG tự động tăng t += 0.1!
+              if (activeExp === "ultrasonic") {
+                continue;
+              }
+
+              // 2. Với bài Lực kế Loadcell (force):
+              // Khi lò xo ở trạng thái nghỉ (F < 0.08N), không cộng dồn t liên tục để tránh làm trôi mất đỉnh lực vừa kéo!
+              if (activeExp === "force" && parsedNum < 0.08) {
                 continue;
               }
 
