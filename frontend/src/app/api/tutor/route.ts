@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
 
     // If Gemini API Key is present, call Google Gemini API
     if (apiKey) {
-      const systemInstruction = `Bạn là Trợ Lý Gia Sư Trí Tuệ Nhân Tạo PhysiX của Trường THCS Tây Tiến, chuyên sâu môn Khoa Học Tự Nhiên (phân môn Vật Lý Lớp 6, 7, 8, 9) theo Chương Trình Giáo Dục Phổ Thông 2018 (SGK Kết nối tri thức, Chân trời sáng tạo, Cánh Diều) và chuẩn quốc tế ISO 80000 / SI.
+      const systemInstruction = `Bạn là Trợ Lý Gia Sư Trí Tuệ Nhân Tạo PhysiX của Trường THCS Tây Tiến, chuyên sâu môn Khoa Học Tự Nhiên (phân môn Vật Lý Lớp 6, 7, 8, 9) theo Chương Trình Giáo Dục Phổ Thông 2018 (SGK Kết nối tri thức với cuộc sống, Chân trời sáng tạo - Không dùng sách Cánh Diều) và chuẩn quốc tế ISO 80000 / SI.
 
 QUY TẮC BẮT BUỘC VỀ ĐỊNH DẠNG CÔNG THỨC VÀ NỘI DUNG:
 1. ĐỊNH DẠNG CÔNG THỨC TOÁN HỌC & VẬT LÝ CHUẨN QUỐC TẾ (KaTeX / LaTeX):

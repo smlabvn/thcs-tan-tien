@@ -25,7 +25,7 @@ export default function AIFloatingTutor() {
       sources: [
         {
           title: "Kho tri thức chuẩn KHTN THCS GDPT 2018",
-          source: "Bộ GD&ĐT (Kết Nối Tri Thức, Cánh Diều, Chân Trời)",
+          source: "Bộ GD&ĐT (Kết Nối Tri Thức Với Cuộc Sống, Chân Trời Sáng Tạo)",
           topic: "Khoa Học Tự Nhiên 6 - 9",
         },
       ],

@@ -113,7 +113,7 @@ export default function AITutorPage() {
           sources: [
             {
               title: "Khoa Học Tự Nhiên - Phân môn Vật lý THCS",
-              source: "SGK KHTN Lớp 6-9 - Kết Nối Tri Thức & Cánh Diều",
+              source: "SGK KHTN Lớp 6-9 - Kết Nối Tri Thức Với Cuộc Sống & Chân Trời Sáng Tạo",
               topic: "Kiến thức Vật Lý THCS",
             },
           ],

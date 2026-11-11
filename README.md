@@ -1,6 +1,6 @@
 # PhysiX - Cổng Học & Thực Nghiệm Vật Lý THPT (FullStack)
 
-> Nền tảng học Vật Lý tương tác, thí nghiệm ảo, kết nối cảm biến Vernier IoT và Trợ lý AI RAG SGK GDPT 2018 (Kết Nối Tri Thức, Cánh Diều, Chân Trời Sáng Tạo).
+> Nền tảng học Vật Lý tương tác, thí nghiệm ảo, kết nối cảm biến Vernier IoT và Trợ lý AI RAG SGK GDPT 2018 (Kết Nối Tri Thức Với Cuộc Sống, Chân Trời Sáng Tạo).
 
 ---
 
