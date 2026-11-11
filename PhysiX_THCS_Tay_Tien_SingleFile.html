@@ -217,7 +217,52 @@
           </div>
         </div>
       </div>
-    </section>
+
+      <!-- Chemical Balancer Card (KHTN 8 - Hóa học & Định luật bảo toàn khối lượng) -->
+      <div class="mt-8 p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100">
+          <div class="flex items-center gap-2.5">
+            <span class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg">🧪</span>
+            <div>
+              <h3 class="font-bold text-base text-slate-900">Máy Cân Bằng Phương Trình Hóa Học &amp; Bảo Toàn Khối Lượng</h3>
+              <p class="text-xs text-slate-500">Chuẩn GDPT 2018 (KHTN 8 - Bài 2, 3) • Tự động giải hệ số tối giản &amp; kiểm tra bảo toàn nguyên tử</p>
+            </div>
+          </div>
+          <span id="chem-eq-type-badge" class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold font-mono">Bảo toàn khối lượng</span>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input id="chem-eq-input" type="text" value="Al + HCl -> AlCl3 + H2" onkeydown="if(event.key==='Enter') balanceChemEquationUI()" placeholder="Nhập sơ đồ phản ứng (VD: Al + HCl -> AlCl3 + H2 hoặc Fe + O2 -> Fe3O4)" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 bg-slate-50 font-mono text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all" />
+          <button type="button" onclick="balanceChemEquationUI()" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0">
+            <span>⚡ Cân bằng PTHH</span>
+          </button>
+        </div>
+
+        <!-- Quick Presets -->
+        <div class="flex items-center gap-1.5 flex-wrap text-xs">
+          <span class="text-slate-500 font-semibold mr-1">PTHH mẫu KHTN 8:</span>
+          <button type="button" onclick="loadPresetChem('Al + HCl -> AlCl3 + H2')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-600 hover:text-white font-mono text-xs font-medium transition-colors">Al + HCl</button>
+          <button type="button" onclick="loadPresetChem('Fe + O2 -> Fe3O4')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-600 hover:text-white font-mono text-xs font-medium transition-colors">Fe + O₂ → Fe₃O₄</button>
+          <button type="button" onclick="loadPresetChem('KMnO4 -> K2MnO4 + MnO2 + O2')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-600 hover:text-white font-mono text-xs font-medium transition-colors">Nhiệt phân KMnO₄</button>
+          <button type="button" onclick="loadPresetChem('C4H10 + O2 -> CO2 + H2O')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-600 hover:text-white font-mono text-xs font-medium transition-colors">Đốt cháy Gas (C₄H₁₀)</button>
+          <button type="button" onclick="loadPresetChem('BaCl2 + Na2SO4 -> BaSO4 + NaCl')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-600 hover:text-white font-mono text-xs font-medium transition-colors">BaCl₂ + Na₂SO₄</button>
+          <button type="button" onclick="loadPresetChem('Cu + HNO3 -> Cu(NO3)2 + NO + H2O')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-600 hover:text-white font-mono text-xs font-medium transition-colors">Cu + HNO₃</button>
+        </div>
+
+        <!-- Result Box -->
+        <div class="p-4 rounded-xl bg-slate-900 text-white flex flex-col gap-3">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span>Phương trình hóa học đã cân bằng (Hệ số tối giản):</span>
+            <span class="text-emerald-400 font-semibold flex items-center gap-1">✓ Định luật bảo toàn khối lượng</span>
+          </div>
+          <div id="chem-eq-output" class="text-lg sm:text-xl font-mono font-bold text-center py-2 px-3 rounded-lg bg-slate-950 text-amber-300 tracking-wide border border-slate-800">
+          </div>
+          <div id="chem-eq-atom-check" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
     <!-- TAB 3: VIRTUAL LAB -->
     <section id="tab-lab" class="tab-content space-y-6">
@@ -997,6 +1042,235 @@
         renderMathInElement(document.body, { delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}] });
       }
     });
+
+    // 7. CHEMICAL EQUATION BALANCER (GAUSSIAN ELIMINATION + HYBRID SOLVER)
+    (function initPhysixBalancer() {
+      function gcd(a, b) {
+        a = Math.abs(a); b = Math.abs(b);
+        while (b) { var t = b; b = a % b; a = t; }
+        return a || 1;
+      }
+      function Fraction(n, d) {
+        if (d === undefined) d = 1;
+        if (d < 0) { n = -n; d = -d; }
+        var g = gcd(n, d);
+        this.n = n / g;
+        this.d = d / g;
+      }
+      Fraction.prototype.add = function(f) { return new Fraction(this.n * f.d + f.n * this.d, this.d * f.d); };
+      Fraction.prototype.sub = function(f) { return new Fraction(this.n * f.d - f.n * this.d, this.d * f.d); };
+      Fraction.prototype.mul = function(f) { return new Fraction(this.n * f.n, this.d * f.d); };
+      Fraction.prototype.div = function(f) { return new Fraction(this.n * f.d, this.d * f.n); };
+      Fraction.prototype.isZero = function() { return this.n === 0; };
+      Fraction.prototype.neg = function() { return new Fraction(-this.n, this.d); };
+
+      var ELEMENTS_LIST = ['H','He','Li','Be','B','C','N','O','F','Ne','Na','Mg','Al','Si','P','S','Cl','Ar','K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Ga','Ge','As','Se','Br','Kr','Rb','Sr','Y','Zr','Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te','I','Xe','Cs','Ba','La','Ce','Pr','Nd','Pm','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb','Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn','Fr','Ra','Ac','Th','Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm'];
+
+      function normalizeSubscripts(str) {
+        var subMap = { '₀':'0', '₁':'1', '₂':'2', '₃':'3', '₄':'4', '₅':'5', '₆':'6', '₇':'7', '₈':'8', '₉':'9' };
+        return str.replace(/[₀₁₂₃₄₅₆₇₈₉]/g, function(ch) { return subMap[ch] || ch; });
+      }
+
+      function autoNormalizeCasing(formula) {
+        if (/[A-Z]/.test(formula)) return formula;
+        var res = '', i = 0;
+        while (i < formula.length) {
+          if (/[a-z]/.test(formula[i])) {
+            var matched = false;
+            if (i + 1 < formula.length && /[a-z]/.test(formula[i + 1])) {
+              var two = formula.substring(i, i + 2);
+              for (var k = 0; k < ELEMENTS_LIST.length; k++) {
+                if (ELEMENTS_LIST[k].toLowerCase() === two.toLowerCase()) {
+                  res += ELEMENTS_LIST[k]; i += 2; matched = true; break;
+                }
+              }
+            }
+            if (!matched) {
+              var one = formula[i];
+              var found = false;
+              for (var m = 0; m < ELEMENTS_LIST.length; m++) {
+                if (ELEMENTS_LIST[m].toLowerCase() === one.toLowerCase()) {
+                  res += ELEMENTS_LIST[m]; found = true; break;
+                }
+              }
+              if (!found) res += one.toUpperCase();
+              i++;
+            }
+          } else { res += formula[i++]; }
+        }
+        return res;
+      }
+
+      function parseChemFormula(formula) {
+        formula = normalizeSubscripts(formula).replace(/\s+/g, '').replace(/[↑↓]/g, '').replace(/\((r|k|dd|l|aq|s|g)\)$/i, '');
+        formula = autoNormalizeCasing(formula);
+        var stack = [{}], i = 0;
+        while (i < formula.length) {
+          var ch = formula[i];
+          if (ch === '(' || ch === '[') { stack.push({}); i++; }
+          else if (ch === ')' || ch === ']') {
+            i++;
+            var multStr = '';
+            while (i < formula.length && /[0-9]/.test(formula[i])) multStr += formula[i++];
+            var mult = multStr ? parseInt(multStr, 10) : 1;
+            var popped = stack.pop();
+            var top = stack[stack.length - 1];
+            Object.keys(popped).forEach(function(el) { top[el] = (top[el] || 0) + popped[el] * mult; });
+          } else if (/[A-Z]/.test(ch)) {
+            var elName = ch; i++;
+            while (i < formula.length && /[a-z]/.test(formula[i])) elName += formula[i++];
+            var numStr = '';
+            while (i < formula.length && /[0-9]/.test(formula[i])) numStr += formula[i++];
+            var count = numStr ? parseInt(numStr, 10) : 1;
+            var cur = stack[stack.length - 1];
+            cur[elName] = (cur[elName] || 0) + count;
+          } else { i++; }
+        }
+        return { atoms: stack[0], normalizedFormula: formula };
+      }
+
+      function formatSubscripts(formula) {
+        var subMap = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉' };
+        return formula.replace(/([A-Za-z\)])(\d+)/g, function(_, p1, digits) {
+          return p1 + digits.split('').map(function(d) { return subMap[d] || d; }).join('');
+        });
+      }
+
+      function solveGaussian(lhsMols, rhsMols) {
+        var allMols = lhsMols.concat(rhsMols);
+        var elementsMap = {};
+        allMols.forEach(function(m) { Object.keys(m.atoms).forEach(function(el) { elementsMap[el] = true; }); });
+        var elements = Object.keys(elementsMap);
+        var numRows = elements.length, numCols = allMols.length, nL = lhsMols.length;
+        var M = [];
+        for (var r = 0; r < numRows; r++) {
+          var el = elements[r], row = [];
+          for (var c = 0; c < numCols; c++) {
+            var count = allMols[c].atoms[el] || 0;
+            row.push(new Fraction(c < nL ? count : -count, 1));
+          }
+          M.push(row);
+        }
+        var lead = 0;
+        for (var r2 = 0; r2 < numRows; r2++) {
+          if (lead >= numCols) break;
+          var i2 = r2;
+          while (i2 < numRows && M[i2][lead].isZero()) i2++;
+          if (i2 === numRows) { lead++; r2--; continue; }
+          var temp = M[r2]; M[r2] = M[i2]; M[i2] = temp;
+          var pivot = M[r2][lead];
+          for (var j = 0; j < numCols; j++) M[r2][j] = M[r2][j].div(pivot);
+          for (var k2 = 0; k2 < numRows; k2++) {
+            if (k2 !== r2 && !M[k2][lead].isZero()) {
+              var factor = M[k2][lead];
+              for (var j2 = 0; j2 < numCols; j2++) M[k2][j2] = M[k2][j2].sub(factor.mul(M[r2][j2]));
+            }
+          }
+          lead++;
+        }
+        var sol = new Array(numCols);
+        for (var idx = 0; idx < numCols; idx++) sol[idx] = null;
+        sol[numCols - 1] = new Fraction(1, 1);
+        var pivotCols = [];
+        for (var r3 = 0; r3 < numRows; r3++) {
+          var pc = -1;
+          for (var c2 = 0; c2 < numCols; c2++) { if (!M[r3][c2].isZero()) { pc = c2; break; } }
+          if (pc !== -1) pivotCols.push({ row: r3, col: pc });
+        }
+        var valid = true;
+        for (var k3 = pivotCols.length - 1; k3 >= 0; k3--) {
+          var rowIdx = pivotCols[k3].row, colIdx = pivotCols[k3].col, sum = new Fraction(0, 1);
+          for (var c3 = colIdx + 1; c3 < numCols; c3++) { if (sol[c3]) sum = sum.add(M[rowIdx][c3].mul(sol[c3])); }
+          sol[colIdx] = sum.neg();
+          if (sol[colIdx].n <= 0) valid = false;
+        }
+        if (valid) {
+          var lcmDenom = 1;
+          for (var c4 = 0; c4 < numCols; c4++) {
+            if (sol[c4]) { var d = sol[c4].d; lcmDenom = (lcmDenom * d) / gcd(lcmDenom, d); }
+          }
+          var intCoeffs = sol.map(function(f) { return f.n * (lcmDenom / f.d); });
+          var commonGcd = intCoeffs[0];
+          for (var i3 = 1; i3 < intCoeffs.length; i3++) commonGcd = gcd(commonGcd, intCoeffs[i3]);
+          return { coeffs: intCoeffs.map(function(x) { return x / commonGcd; }), elements: elements };
+        }
+        return null;
+      }
+
+      window.balanceChemEquationUI = function() {
+        var inp = document.getElementById('chem-eq-input');
+        var out = document.getElementById('chem-eq-output');
+        var chk = document.getElementById('chem-eq-atom-check');
+        var badge = document.getElementById('chem-eq-type-badge');
+        if (!inp || !out) return;
+
+        var raw = inp.value.trim();
+        var norm = normalizeSubscripts(raw);
+        var parts = norm.split(/->|-->|=>|==>|→|⟶|➔|=/);
+        if (parts.length !== 2) {
+          out.innerHTML = '<span class="text-rose-400 text-sm">Vui lòng nhập dạng: <code>Chất tham gia -> Sản phẩm</code> (VD: Al + HCl -> AlCl3 + H2)</span>';
+          return;
+        }
+
+        var lhsRaw = parts[0].split('+').map(function(s) { return s.trim().replace(/^\d+\s*/, ''); }).filter(Boolean);
+        var rhsRaw = parts[1].split('+').map(function(s) { return s.trim().replace(/^\d+\s*/, ''); }).filter(Boolean);
+        var lhsParsed = lhsRaw.map(parseChemFormula);
+        var rhsParsed = rhsRaw.map(parseChemFormula);
+
+        var res = solveGaussian(lhsParsed, rhsParsed);
+        if (!res || !res.coeffs) {
+          out.innerHTML = '<span class="text-rose-400 text-sm">⚠️ Không thể cân bằng! Hãy kiểm tra lại sơ đồ phản ứng.</span>';
+          return;
+        }
+
+        var c = res.coeffs;
+        var lhsStr = lhsParsed.map(function(m, i) {
+          var coef = c[i] > 1 ? '<span class="text-emerald-400 font-bold">' + c[i] + '</span> ' : '';
+          return coef + formatSubscripts(m.normalizedFormula);
+        }).join(' + ');
+
+        var rhsStr = rhsParsed.map(function(m, j) {
+          var coef = c[lhsParsed.length + j] > 1 ? '<span class="text-emerald-400 font-bold">' + c[lhsParsed.length + j] + '</span> ' : '';
+          var fClean = m.normalizedFormula;
+          var gasTag = /^(O2|H2|CO2|SO2|N2|Cl2|NH3|H2S)$/.test(fClean) ? '↑' : (/^(BaSO4|AgCl|CaCO3|Cu\(OH\)2|Fe\(OH\)3)$/.test(fClean) ? '↓' : '');
+          return coef + formatSubscripts(fClean) + gasTag;
+        }).join(' + ');
+
+        out.innerHTML = lhsStr + ' → ' + rhsStr;
+
+        if (badge) {
+          if (lhsParsed.length === 1 && rhsParsed.length >= 2) badge.textContent = 'Phản ứng phân hủy (Nhiệt phân)';
+          else if (lhsParsed.length >= 2 && rhsParsed.length === 1) badge.textContent = 'Phản ứng hóa hợp';
+          else if (raw.indexOf('O2') !== -1 && raw.indexOf('CO2') !== -1) badge.textContent = 'Phản ứng đốt cháy chất hữu cơ';
+          else if (lhsParsed.length === 2 && rhsParsed.length === 2 && (Object.keys(lhsParsed[0].atoms).length === 1 || Object.keys(lhsParsed[1].atoms).length === 1)) badge.textContent = 'Phản ứng thế (Kim loại + Acid / Muối)';
+          else badge.textContent = 'Phản ứng trao đổi trong dung dịch';
+        }
+
+        if (chk) {
+          var cards = [];
+          res.elements.forEach(function(el) {
+            var cntL = 0, cntR = 0;
+            lhsParsed.forEach(function(m, i) { cntL += c[i] * (m.atoms[el] || 0); });
+            rhsParsed.forEach(function(m, j) { cntR += c[lhsParsed.length + j] * (m.atoms[el] || 0); });
+            cards.push('<div class="p-2 rounded bg-slate-950 border border-slate-800 text-center"><strong class="text-cyan-300">' + el + ':</strong> VT = ' + cntL + ' | VP = ' + cntR + ' ✓</div>');
+          });
+          chk.innerHTML = cards.join('');
+        }
+      };
+
+      window.loadPresetChem = function(eq) {
+        var inp = document.getElementById('chem-eq-input');
+        if (inp) {
+          inp.value = eq;
+          window.balanceChemEquationUI();
+        }
+      };
+
+      setTimeout(function() {
+        if (window.balanceChemEquationUI) window.balanceChemEquationUI();
+      }, 200);
+    })();
+
   </script>
 </body>
 </html>
