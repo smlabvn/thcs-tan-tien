@@ -230,6 +230,20 @@ void checkSerialCommands() {
         if (forceHold) holdForceVal = peakForce;
         Serial.println(forceHold ? F(">> [HOLD]: Da khoa gia tri luc!") : F(">> [UNHOLD]: Da mo khoa!"));
       }
+    } else if (cmd == "MODE:sound" || cmd == "MODE:1") {
+      menuCursor = 1;
+      enterExperiment(1);
+    } else if (cmd == "MODE:ultrasonic" || cmd == "MODE:2") {
+      menuCursor = 2;
+      enterExperiment(2);
+    } else if (cmd == "MODE:force" || cmd == "MODE:3") {
+      menuCursor = 3;
+      enterExperiment(3);
+    } else if (cmd == "MODE:ohm" || cmd == "MODE:4") {
+      menuCursor = 4;
+      enterExperiment(4);
+    } else if (cmd == "MODE:menu" || cmd == "MENU") {
+      returnToMenu();
     } else if (cmd.startsWith("DIST:") || cmd.startsWith("dist:") || cmd.startsWith("S:") || cmd.startsWith("s:")) {
       int colonIdx = cmd.indexOf(':');
       float newDist = cmd.substring(colonIdx + 1).toFloat();

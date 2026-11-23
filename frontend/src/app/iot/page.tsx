@@ -690,12 +690,30 @@ export default function VernierIoTPage() {
   const pcMicStreamRef = useRef<MediaStream | null>(null);
   const pcAudioContextRef = useRef<AudioContext | null>(null);
 
+  // Quản lý Singleton Web Serial toàn cục trên window để KHÔNG BAO GIỜ bị kẹt khóa stream hay lỗi "The port is already open"
+  const getGlobalSerialMgr = () => {
+    if (typeof window === "undefined") return null;
+    const w = window as any;
+    if (!w.__physixSerialMgr) {
+      w.__physixSerialMgr = {
+        port: null,
+        reader: null,
+        keepReading: false,
+        isLoopRunning: false,
+        onLine: null as ((line: string) => void) | null,
+      };
+    }
+    return w.__physixSerialMgr;
+  };
+
   // Hàm gửi lệnh điều khiển 2 chiều qua Web Serial xuống vi điều khiển ESP32
   const sendSerialCommand = async (cmd: string) => {
-    if (!serialPortRef.current || !serialPortRef.current.writable) return;
+    const mgr = getGlobalSerialMgr();
+    const activePort = serialPortRef.current || mgr?.port;
+    if (!activePort || !activePort.writable) return;
     try {
       const encoder = new TextEncoder();
-      const writer = serialPortRef.current.writable.getWriter();
+      const writer = activePort.writable.getWriter();
       await writer.write(encoder.encode(cmd + "\n"));
       writer.releaseLock();
     } catch (e) {
@@ -708,6 +726,13 @@ export default function VernierIoTPage() {
   const [connectionStatus, setConnectionStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
   const [statusMsg, setStatusMsg] = useState<string>("Chế độ 1: Cảm biến phần cứng thật. Hãy cắm cáp USB và bấm 'Cắm USB Serial' để đọc dữ liệu ESP32.");
   const [lastRawLine, setLastRawLine] = useState<string>("");
+  const [espBoxMode, setEspBoxMode] = useState<ExperimentType | "menu" | null>(null);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState<boolean>(true);
+  const autoSaveEnabledRef = useRef<boolean>(true);
+  useEffect(() => {
+    autoSaveEnabledRef.current = autoSaveEnabled;
+  }, [autoSaveEnabled]);
+
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [showCodeModal, setShowCodeModal] = useState<boolean>(false);
 
@@ -715,6 +740,10 @@ export default function VernierIoTPage() {
   const serialPortRef = useRef<any>(null);
   const serialReaderRef = useRef<any>(null);
   const keepReadingRef = useRef<boolean>(false);
+  const lastEspAutoSwitchedModeRef = useRef<ExperimentType | "menu" | null>(null);
+  const lastAutoSaveTimeRef = useRef<Record<string, number>>({});
+  const lastAutoSaveValRef = useRef<Record<string, number>>({});
+  const recordedCountRef = useRef<Record<string, number>>({});
 
   // Theoretical value based on current parameter
   const theoryValue = exp.calcTheory(paramValue);
@@ -727,6 +756,11 @@ export default function VernierIoTPage() {
   useEffect(() => {
     activeExpRef.current = activeExp;
   }, [activeExp]);
+
+  const expModeRef = useRef<"hardware" | "simulator">(expMode);
+  useEffect(() => {
+    expModeRef.current = expMode;
+  }, [expMode]);
 
   const autoSyncOhmVoltageRef = useRef<boolean>(autoSyncOhmVoltage);
   useEffect(() => {
@@ -766,8 +800,13 @@ export default function VernierIoTPage() {
     } catch {}
   }, []);
 
-  // Tự động lưu số liệu vào localStorage mỗi khi bảng cập nhật
+  // Tự động lưu số liệu vào localStorage mỗi khi bảng cập nhật & đồng bộ đếm số dòng
   useEffect(() => {
+    const counts: Record<string, number> = { sound: 0, ultrasonic: 0, force: 0, ohm: 0 };
+    recordedPoints.forEach((r) => {
+      counts[r.experimentId] = (counts[r.experimentId] || 0) + 1;
+    });
+    recordedCountRef.current = counts;
     try {
       localStorage.setItem("physix_iot_recorded_points", JSON.stringify(recordedPoints));
     } catch {}
@@ -791,6 +830,9 @@ export default function VernierIoTPage() {
       customTimeStr ||
       now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
+    lastAutoSaveTimeRef.current[expId] = Date.now();
+    lastAutoSaveValRef.current[expId] = measuredVal;
+
     setRecordedPoints((prev) => {
       const sameExpCount = prev.filter((r) => r.experimentId === expId).length;
       const newPoint: RecordedPoint = {
@@ -811,8 +853,36 @@ export default function VernierIoTPage() {
       return [...prev, newPoint];
     });
 
-    setSaveSuccessMsg(`✅ Đã TỰ ĐỘNG lưu kết quả ${measuredVal} ${cfg.defaultUnit} vào Bảng Số Liệu!`);
+    setSaveSuccessMsg(`✅ Đã TỰ ĐỘNG lưu kết quả ${measuredVal} ${cfg.defaultUnit} (${cfg.grade}) vào Bảng Số Liệu!`);
     setTimeout(() => setSaveSuccessMsg(null), 4000);
+  };
+
+  // Tự động lấy mẫu thông minh vào Bảng Số Liệu cho các bài đo liên tục (Âm thanh, Lực kế, Định luật Ôm)
+  const tryAutoSaveContinuous = (expId: ExperimentType, measuredVal: number, customParamVal?: number) => {
+    if (!autoSaveEnabledRef.current) return;
+    if (isNaN(measuredVal) || measuredVal <= 0) return;
+    if (expId === "force" && measuredVal < 0.1) return; // Không lưu khi lực kế đang nghỉ 0N
+
+    const nowMs = Date.now();
+    const lastTime = lastAutoSaveTimeRef.current[expId] || 0;
+    const lastVal = lastAutoSaveValRef.current[expId] ?? -9999;
+    const curCount = recordedCountRef.current[expId] || 0;
+
+    // 1. Nếu bảng của bài này chưa có dòng nào (curCount === 0 hoặc lastTime === 0): Lưu NGAY LẬP TỨC Lần đo 1!
+    if (curCount === 0 || lastTime === 0) {
+      autoAppendRecord(expId, measuredVal, customParamVal);
+      return;
+    }
+
+    // 2. Các lần đo tiếp theo: Tự động lưu khi có sự thay đổi giá trị đáng kể (sau ít nhất 2.2 giây) hoặc định kỳ mỗi 4 giây (tối đa 12 mẫu tự động để bảng gọn đẹp)
+    if (curCount < 12) {
+      const elapsed = nowMs - lastTime;
+      const delta = Math.abs(measuredVal - lastVal);
+      const threshold = expId === "sound" ? 1.2 : expId === "ohm" ? 0.8 : 0.12;
+      if ((elapsed >= 2200 && delta >= threshold) || elapsed >= 4000) {
+        autoAppendRecord(expId, measuredVal, customParamVal);
+      }
+    }
   };
 
   // Active records for current experiment tab
@@ -956,7 +1026,10 @@ export default function VernierIoTPage() {
         errorPct: parseFloat((Math.abs(measuredF - forceN) / (forceN || 1) * 100).toFixed(2)),
       },
     ]);
-    setStatusMsg(`Đã treo quả nặng ${grams}g: Lực đàn hồi F = ${measuredF} N, Độ dãn Δl = ${deltaL_cm} cm.`);
+    if (measuredF > 0) {
+      autoAppendRecord("force", measuredF, deltaL_cm);
+    }
+    setStatusMsg(`Đã treo quả nặng ${grams}g: Lực đàn hồi F = ${measuredF} N, Độ dãn Δl = ${deltaL_cm} cm — Đã TỰ ĐỘNG lưu vào bảng!`);
   };
 
   // 3. Tự gạt Khóa K và điều chỉnh Biến trở con chạy (Định luật Ôm)
@@ -984,7 +1057,10 @@ export default function VernierIoTPage() {
         errorPct: parseFloat((Math.abs(iMeasured - iTheoretical) / (iTheoretical || 1) * 100).toFixed(2)),
       },
     ]);
-    setStatusMsg(`Đã đóng Khóa K: U = ${curU}V, Biến trở Rb = ${rOhm} Ω, Dòng điện I = ${iMeasured} mA.`);
+    if (iMeasured > 0) {
+      autoAppendRecord("ohm", iMeasured, curU);
+    }
+    setStatusMsg(`Đã đóng Khóa K: U = ${curU}V, Biến trở Rb = ${rOhm} Ω, Dòng điện I = ${iMeasured} mA — Đã TỰ ĐỘNG lưu vào bảng!`);
   };
 
   // 4. Tự tạo tiếng động / gõ âm thanh
@@ -1001,7 +1077,8 @@ export default function VernierIoTPage() {
         errorPct: parseFloat((Math.abs(peakDb - curTheory) / curTheory * 100).toFixed(2)),
       },
     ]);
-    setStatusMsg(`🔊 Đã phát xung âm thanh thử nghiệm: Đỉnh đo được ${peakDb} dB!`);
+    autoAppendRecord("sound", peakDb);
+    setStatusMsg(`🔊 Đã phát xung âm thanh thử nghiệm: Đỉnh đo được ${peakDb} dB — Đã TỰ ĐỘNG lưu vào bảng!`);
 
     setTimeout(() => {
       const ambientDb = parseFloat((curTheory + (Math.random() - 0.5) * 3.0).toFixed(1));
@@ -1057,6 +1134,7 @@ export default function VernierIoTPage() {
         const rms = Math.sqrt(sum / bufferLength);
         const measuredDb = parseFloat((45.0 + rms * 60.0).toFixed(1));
         setCurrentLiveVal(measuredDb);
+        tryAutoSaveContinuous("sound", measuredDb);
 
         tSound += 0.1;
         const curTheory = theoryValueRef.current;
@@ -1081,7 +1159,6 @@ export default function VernierIoTPage() {
 
     // Nếu ở chế độ TỰ THAO TÁC THỦ CÔNG: Người dùng chủ động bấm nút
     if (simModeType === "manual") {
-      // Chỉ duy trì dao động nền nhẹ cho các bài liên tục nếu đang ghi nhận
       if (activeExp === "ultrasonic") {
         return; // Bài cổng quang chờ người dùng bấm "🚀 BẤM THẢ XE LĂN"
       }
@@ -1116,6 +1193,9 @@ export default function VernierIoTPage() {
             errorPct: err,
           },
         ]);
+        if (autoSaveEnabledRef.current) {
+          autoAppendRecord("ultrasonic", simSpeed, paramValue, timeStr);
+        }
       };
 
       runSimPhotogate();
@@ -1146,376 +1226,500 @@ export default function VernierIoTPage() {
           errorPct: errorPct,
         },
       ]);
+
+      if (simModeType === "auto") {
+        tryAutoSaveContinuous(activeExp, measured, paramValue);
+      }
     }, simModeType === "manual" ? 300 : 150);
 
     return () => clearInterval(interval);
   }, [expMode, isRecording, theoryValue, activeExp, paramValue, simModeType]);
 
-  // Web Serial API handler
-  const handleConnectSerial = async () => {
-    if (!("serial" in navigator)) {
-      alert("Trình duyệt của bạn chưa bật Web Serial API. Vui lòng sử dụng Google Chrome hoặc Microsoft Edge phiên bản mới!");
+  // Bộ xử lý từng dòng dữ liệu gửi về từ ESP32
+  const serialTimeCounterRef = useRef<number>(0);
+
+  const processIncomingSerialLine = (trimmed: string) => {
+    if (!trimmed) return;
+    setLastRawLine(trimmed);
+
+    // 1. Nhận diện chế độ hiện tại của hộp ESP32
+    let detectedMode: ExperimentType | "menu" | null = null;
+    let isExplicitModeHeader = false;
+
+    if (trimmed.includes("MODE:menu") || trimmed.includes("CHON THI NGHIEM") || trimmed.includes("VE MENU CHINH")) {
+      detectedMode = "menu";
+      isExplicitModeHeader = true;
+    } else if (
+      trimmed.includes("MODE:ultrasonic") ||
+      trimmed.includes("2 CONG QUANG") ||
+      trimmed.includes("CONG A:") ||
+      trimmed.includes("TOC DO IR")
+    ) {
+      detectedMode = "ultrasonic";
+      isExplicitModeHeader = true;
+    } else if (
+      trimmed.includes("MODE:ohm") ||
+      trimmed.includes("DINH LUAT OHM") ||
+      trimmed.includes("INA219")
+    ) {
+      detectedMode = "ohm";
+      isExplicitModeHeader = true;
+    } else if (
+      trimmed.includes("MODE:force") ||
+      trimmed.includes("LOADCELL") ||
+      trimmed.includes("LUC KE") ||
+      trimmed.includes("HX711")
+    ) {
+      detectedMode = "force";
+      isExplicitModeHeader = true;
+    } else if (
+      trimmed.includes("MODE:sound") ||
+      trimmed.includes("AM THANH") ||
+      trimmed.includes("MAX4466")
+    ) {
+      detectedMode = "sound";
+      isExplicitModeHeader = true;
+    } else if ((trimmed.includes("Van toc") || trimmed.includes("v =")) && (trimmed.includes("Thoi gian") || trimmed.includes("t ="))) {
+      detectedMode = "ultrasonic";
+    } else if (trimmed.includes("Dong dien I:") && (trimmed.includes("Dien ap U:") || trimmed.includes("U =") || trimmed.includes("Ohm"))) {
+      detectedMode = "ohm";
+    } else if (trimmed.includes("Luc F:") || (trimmed.includes("Luc:") && trimmed.includes("Dinh:"))) {
+      detectedMode = "force";
+    } else if (trimmed.includes("Do to:") && trimmed.includes("dB")) {
+      detectedMode = "sound";
+    }
+
+    if (detectedMode) {
+      setEspBoxMode(detectedMode);
+
+      // Chỉ tự động nhảy tab trên Web khi hộp ESP32 VỪA ĐỔI CHẾ ĐỘ hoặc vừa mới kết nối lần đầu
+      // (Tránh việc hộp gửi "Do to: 95.4 dB" mỗi 50ms khóa cứng không cho người dùng bấm sang tab khác trên Web!)
+      if (
+        detectedMode !== "menu" &&
+        (isExplicitModeHeader || lastEspAutoSwitchedModeRef.current !== detectedMode)
+      ) {
+        lastEspAutoSwitchedModeRef.current = detectedMode;
+        if (activeExpRef.current !== detectedMode) {
+          setActiveExp(detectedMode);
+          activeExpRef.current = detectedMode;
+          setStatusMsg(`✨ Đã đồng bộ tự động với hộp ESP32: [${EXPERIMENTS[detectedMode].title}]`);
+        }
+      }
+    }
+
+    // 2. Xử lý các tín hiệu điều khiển trạng thái
+    if (trimmed.includes("MODE:menu")) {
+      setStatusMsg("📟 Hộp ESP32 đang ở Menu chọn bài. Hãy bấm Nút 2 để chọn bài, Nút 1 để vào bài!");
+      return;
+    }
+    if (trimmed.includes(">> PAUSE")) {
+      setIsRecording(false);
+      isRecordingRef.current = false;
+      const targetExp = (detectedMode && detectedMode !== "menu") ? detectedMode : activeExpRef.current;
+      const valToSave = currentLiveValRef.current;
+      if (valToSave > 0) {
+        autoAppendRecord(targetExp, valToSave);
+      }
+      setStatusMsg(`⏸️ Hộp ESP32 đã Tạm dừng (PAUSE) và TỰ ĐỘNG lưu kết quả ${valToSave} vào bảng!`);
+      return;
+    }
+    if (trimmed.includes(">> RUN")) {
+      setIsRecording(true);
+      isRecordingRef.current = true;
+      setStatusMsg("▶️ Hộp ESP32 đang tiếp tục đo (RUN)...");
+      return;
+    }
+    if (trimmed.includes(">> [HOLD]")) {
+      const lockedF = peakForceRef.current > 0.1 ? peakForceRef.current : currentLiveValRef.current;
+      if (lockedF > 0.05) {
+        autoAppendRecord("force", lockedF);
+        setStatusMsg(`✅ ESP32 đã khóa số đo lực (${lockedF} N) và TỰ ĐỘNG lưu vào Bảng Số Liệu!`);
+      } else {
+        setStatusMsg("ESP32 đã khóa số đo lực (HOLD) để dễ ghi chép!");
+      }
+      return;
+    }
+    if (trimmed.includes(">> [UNHOLD]")) {
+      setStatusMsg("ESP32 đã mở khóa số đo, tiếp tục đo live!");
+      return;
+    }
+    if (trimmed.includes(">> [RESET]")) {
+      lastPhotogateRunRef.current = null;
+      setLastPhotogateRun(null);
+      setStatusMsg("ESP32 đã Reset thành công! Sẵn sàng cho lượt thả xe mới.");
+      return;
+    }
+    if (trimmed.includes(">> [TARE]")) {
+      setPeakForce(0);
+      setStatusMsg("ESP32 đã Tare lực kế về 0.00 N và xóa đỉnh cũ.");
       return;
     }
 
-    try {
-      setConnectionStatus("connecting");
-      setStatusMsg("Đang yêu cầu chọn cổng COM/USB...");
-
-      // 1. Dọn dẹp an toàn reader cũ nếu đang chạy
-      keepReadingRef.current = false;
-      if (serialReaderRef.current) {
-        try {
-          await serialReaderRef.current.cancel();
-          serialReaderRef.current.releaseLock();
-        } catch (e) {}
-        serialReaderRef.current = null;
+    // 3. Đồng bộ khoảng cách s từ nút nhấn ESP32 lên Web
+    if (trimmed.includes(">> DIST:") || trimmed.includes("Da doi khoang cach s = ") || trimmed.includes("Da cap nhat khoang cach s = ")) {
+      const matchD = trimmed.match(/(?:DIST:|s\s*=\s*)([0-9]+(?:\.[0-9]+)?)/i);
+      if (matchD && matchD[1]) {
+        const newD = parseFloat(matchD[1]);
+        if (!isNaN(newD) && newD >= 5 && newD <= 200) {
+          setParamValue(newD);
+          setStatusMsg(`Hộp ESP32 đã đổi khoảng cách s = ${newD} cm!`);
+          return;
+        }
       }
+    }
 
-      // 2. Lấy cổng COM: Nếu đã chọn trước đó thì tái sử dụng, hoặc yêu cầu chọn cổng
-      // @ts-ignore
-      let port = serialPortRef.current;
-      if (!port) {
-        // @ts-ignore
-        port = await navigator.serial.requestPort();
+    // 4. Bắt điện áp thực tế U (V) từ cảm biến INA219
+    const matchU = trimmed.match(/(?:Dien ap U|U)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+    let parsedUVal: number | null = null;
+    if (matchU && matchU[1]) {
+      const measuredU = parseFloat(matchU[1]);
+      if (!isNaN(measuredU) && measuredU > 0.05 && measuredU < 30.0) {
+        parsedUVal = measuredU;
+        setRealVoltage(measuredU);
+        if ((activeExpRef.current === "ohm" || detectedMode === "ohm") && autoSyncOhmVoltageRef.current) {
+          setParamValue(parseFloat(measuredU.toFixed(2)));
+        }
       }
+    }
 
-      // 3. Mở cổng với cơ chế chống lỗi "The port is already open"
-      try {
-        await port.open({ baudRate: exp.baudRate });
-      } catch (openErr: any) {
-        // Nếu cổng đã mở sẵn trong bộ nhớ trình duyệt, ta bỏ qua lỗi và tái sử dụng ngay!
-        if (
-          openErr.name === "InvalidStateError" ||
-          (openErr.message && openErr.message.toLowerCase().includes("already open"))
-        ) {
-          console.warn("SerialPort was already open. Reusing existing open port.");
-        } else {
-          // Lỗi thật sự (VD: bị chiếm bởi ứng dụng khác ngoài Chrome)
-          serialPortRef.current = null;
-          throw openErr;
+    // 5. Bắt trọn vẹn kết quả lượt chạy 2 Cổng quang điện (Photogate)
+    const isPhotogateData =
+      (trimmed.includes("Van toc") || trimmed.includes("v =") || trimmed.includes("v:") || trimmed.includes("KET QUA:")) &&
+      (trimmed.includes("Thoi gian") || trimmed.includes("t =") || trimmed.includes("t:"));
+
+    if (isPhotogateData) {
+      const matchVel = trimmed.match(/(?:Van toc\s*v|Van toc|v)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+      const matchTime = trimmed.match(/(?:Thoi gian\s*t|Thoi gian|t)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+      const matchS = trimmed.match(/(?:s|distance)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+      let parsedSVal: number | null = null;
+      if (matchS && matchS[1]) {
+        const parsedS = parseFloat(matchS[1]);
+        if (!isNaN(parsedS) && parsedS >= 5) {
+          parsedSVal = parsedS;
+          setParamValue(parsedS);
         }
       }
 
-      serialPortRef.current = port;
+      if (matchVel && matchTime) {
+        const speedVal = parseFloat(matchVel[1]);
+        const timeVal = parseFloat(matchTime[1]);
+        const usedS = parsedSVal !== null ? parsedSVal : paramValueRef.current;
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+        const prevRun = lastPhotogateRunRef.current;
+        const isDuplicate =
+          prevRun &&
+          Math.abs(prevRun.speed - speedVal) < 0.001 &&
+          Math.abs(prevRun.time - timeVal) < 0.0001;
+
+        if (!isDuplicate) {
+          const newRun = {
+            speed: speedVal,
+            time: timeVal,
+            timestamp: timeStr,
+          };
+          lastPhotogateRunRef.current = newRun;
+          setLastPhotogateRun(newRun);
+
+          const curTheory = EXPERIMENTS["ultrasonic"].calcTheory(usedS);
+          const err = curTheory > 0
+            ? parseFloat((Math.abs(speedVal - curTheory) / curTheory * 100).toFixed(2))
+            : 0;
+
+          setTelemetryList((prev) => [
+            ...prev.slice(-35),
+            {
+              time: timeVal,
+              measured: speedVal,
+              theory: parseFloat(curTheory.toFixed(2)),
+              errorPct: err,
+            },
+          ]);
+
+          // TỰ ĐỘNG LƯU KẾT QUẢ VÀO BẢNG SỐ LIỆU THÍ NGHIỆM!
+          autoAppendRecord("ultrasonic", speedVal, usedS, timeStr);
+        }
+
+        setCurrentLiveVal(speedVal);
+        setStatusMsg(`🎉 Đã bắt trọn lượt chạy: v = ${speedVal} cm/s | t = ${timeVal} s — Đã TỰ ĐỘNG lưu vào Bảng Số Liệu!`);
+        return;
+      }
+    }
+
+    // 6. Bắt đỉnh lực kéo lò xo Loadcell (Peak Force)
+    const matchPeak = trimmed.match(/(?:Dinh|Peak)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+    if (matchPeak && matchPeak[1]) {
+      const pVal = parseFloat(matchPeak[1]);
+      if (!isNaN(pVal) && pVal > 0) {
+        setPeakForce((prev) => Math.max(prev, pVal));
+      }
+    }
+
+    // 7. Trích xuất giá trị đo chính của dòng dữ liệu
+    const targetExp: ExperimentType =
+      detectedMode && detectedMode !== "menu" ? detectedMode : activeExpRef.current;
+
+    let parsedNum: number = NaN;
+    const matchI = trimmed.match(/(?:Dong dien I|I)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+    const matchDb = trimmed.match(/Do to[\s:=]+(-?\d+(?:\.\d+)?)/i);
+    const matchF = trimmed.match(/(?:Luc F|Luc)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+
+    if (matchDb && matchDb[1]) {
+      parsedNum = parseFloat(matchDb[1]);
+    } else if (matchI && matchI[1]) {
+      parsedNum = parseFloat(matchI[1]);
+    } else if (matchF && matchF[1]) {
+      parsedNum = parseFloat(matchF[1]);
+    } else {
+      const direct = parseFloat(trimmed);
+      if (!isNaN(direct) && /^-?\d+(\.\d+)?/.test(trimmed)) {
+        parsedNum = direct;
+      } else {
+        const matchWithLabel = trimmed.match(/(?:Do to|Luc F|Luc|Van toc|v|d|I|s|F|m)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+        if (matchWithLabel && matchWithLabel[1]) {
+          parsedNum = parseFloat(matchWithLabel[1]);
+        }
+      }
+    }
+
+    if (!isNaN(parsedNum)) {
+      // Tự động lưu vào Bảng Số Liệu cho bài tương ứng (kể cả khi đang ở chế độ RUN!)
+      const customP =
+        targetExp === "ohm" && parsedUVal !== null ? parseFloat(parsedUVal.toFixed(2)) : undefined;
+      tryAutoSaveContinuous(targetExp, parsedNum, customP);
+
+      // Cập nhật đồ thị và đồng hồ nếu đang ở đúng tab (hoặc hiển thị live)
+      if (activeExpRef.current === targetExp) {
+        setCurrentLiveVal(parsedNum);
+        if (targetExp === "force" && parsedNum > 0.15) {
+          setPeakForce((prev) => Math.max(prev, parsedNum));
+        }
+
+        if (!isRecordingRef.current) return;
+        if (targetExp === "ultrasonic") return;
+        if (targetExp === "force" && parsedNum < 0.08) return;
+
+        serialTimeCounterRef.current += 0.1;
+        const tCur = serialTimeCounterRef.current;
+        const curTheory = theoryValueRef.current;
+        const err = curTheory > 0
+          ? parseFloat((Math.abs(parsedNum - curTheory) / curTheory * 100).toFixed(2))
+          : 0;
+
+        setTelemetryList((prev) => [
+          ...prev.slice(-35),
+          {
+            time: parseFloat(tCur.toFixed(1)),
+            measured: parsedNum,
+            theory: parseFloat(curTheory.toFixed(2)),
+            errorPct: err,
+          },
+        ]);
+      }
+    }
+  };
+
+  // Keep latest reference to processIncomingSerialLine for global singleton loop
+  const processIncomingSerialLineRef = useRef(processIncomingSerialLine);
+  useEffect(() => {
+    processIncomingSerialLineRef.current = processIncomingSerialLine;
+    const mgr = getGlobalSerialMgr();
+    if (mgr) {
+      mgr.onLine = (line: string) => processIncomingSerialLineRef.current(line);
+    }
+  });
+
+  // Hàm kết nối Web Serial dùng chung (hỗ trợ cả tự động kết nối ngầm khi mở trang & bấm nút)
+  const connectSerialInternal = async (promptUser: boolean) => {
+    if (typeof navigator === "undefined" || !("serial" in navigator)) {
+      if (promptUser) {
+        alert("Trình duyệt của bạn chưa bật Web Serial API. Vui lòng sử dụng Google Chrome hoặc Microsoft Edge phiên bản mới!");
+      }
+      return;
+    }
+
+    const mgr = getGlobalSerialMgr();
+    if (!mgr) return;
+
+    // Luôn gắn callback mới nhất
+    mgr.onLine = (line: string) => processIncomingSerialLineRef.current(line);
+
+    // TRƯỜNG HỢP 1: Cổng đã mở và vòng lặp đọc đang chạy sẵn trong trình duyệt!
+    if (mgr.port && mgr.isLoopRunning) {
+      serialPortRef.current = mgr.port;
+      serialReaderRef.current = mgr.reader;
       keepReadingRef.current = true;
       setExpMode("hardware");
       setConnectionType("serial");
       setConnectionStatus("connected");
       setIsRecording(true);
       isRecordingRef.current = true;
-      setStatusMsg(`✓ Đã kết nối trực tiếp cổng USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu...`);
+      setStatusMsg(`✓ Đang duy trì kết nối trực tiếp USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu từ ESP32...`);
+      return;
+    }
 
-      // 4. Giải phóng khóa stream cũ nếu có trước khi đọc mới
-      if (port.readable && port.readable.locked) {
+    try {
+      if (promptUser) {
+        setConnectionStatus("connecting");
+        setStatusMsg("Đang kết nối cổng COM/USB...");
+      }
+
+      // @ts-ignore
+      let port = mgr.port || serialPortRef.current;
+
+      // Kiểm tra các cổng đã được cấp quyền trước đó qua navigator.serial.getPorts()
+      if (!port) {
         try {
-          const tempReader = port.readable.getReader();
-          tempReader.releaseLock();
+          // @ts-ignore
+          const authorizedPorts = await navigator.serial.getPorts();
+          if (authorizedPorts && authorizedPorts.length > 0) {
+            // Ưu tiên cổng đang mở sẵn hoặc cổng đầu tiên
+            port = authorizedPorts.find((p: any) => p.readable !== null) || authorizedPorts[0];
+          }
         } catch (e) {}
       }
 
-      // Đọc trực tiếp qua getReader() & TextDecoder (chuẩn W3C Web Serial, không bị kẹt khóa pipeTo)
-      const reader = port.readable.getReader();
-      serialReaderRef.current = reader;
-      const decoder = new TextDecoder();
+      // Nếu người dùng chủ động bấm nút và vẫn chưa có cổng nào (hoặc muốn chọn lại)
+      if (!port) {
+        if (!promptUser) return; // Auto-connect trên mount dừng lại nhẹ nhàng nếu chưa từng cấp quyền
+        // @ts-ignore
+        port = await navigator.serial.requestPort();
+      }
 
-      let buffer = "";
-      let t = 0;
-
-      while (keepReadingRef.current) {
-        const { value, done } = await reader.read();
-        if (done) {
-          try { reader.releaseLock(); } catch (e) {}
-          break;
-        }
-        if (value) {
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-            setLastRawLine(trimmed);
-
-            // Tự động nhận diện và chuyển bài thí nghiệm tương ứng với cảm biến trên bo mạch
-            if (
-              trimmed.includes("MODE:ultrasonic") ||
-              trimmed.includes("2 CONG QUANG") ||
-              trimmed.includes("CONG A:") ||
-              trimmed.includes("TOC DO IR") ||
-              ((trimmed.includes("Van toc") || trimmed.includes("v =")) && (trimmed.includes("Thoi gian") || trimmed.includes("t =")))
-            ) {
-              if (activeExpRef.current !== "ultrasonic") {
-                setActiveExp("ultrasonic");
-                activeExpRef.current = "ultrasonic";
-                setStatusMsg("✨ ESP32: Tự động chuyển sang [Bài 2: Tốc độ 2 Cổng quang điện]!");
-              }
-            } else if (
-              trimmed.includes("MODE:ohm") ||
-              trimmed.includes("DINH LUAT OHM") ||
-              trimmed.includes("INA219") ||
-              (trimmed.includes("Dong dien I:") && (trimmed.includes("Dien ap U:") || trimmed.includes("U =") || trimmed.includes("Ohm")))
-            ) {
-              if (activeExpRef.current !== "ohm") {
-                setActiveExp("ohm");
-                activeExpRef.current = "ohm";
-                setStatusMsg("✨ ESP32: Tự động chuyển sang [Bài 4: Khảo sát Định luật Ôm INA219]!");
-              }
-            } else if (
-              trimmed.includes("MODE:force") ||
-              trimmed.includes("LOADCELL") ||
-              trimmed.includes("LUC KE") ||
-              trimmed.includes("HX711") ||
-              trimmed.includes("Luc F:")
-            ) {
-              if (activeExpRef.current !== "force") {
-                setActiveExp("force");
-                activeExpRef.current = "force";
-                setStatusMsg("✨ ESP32: Tự động chuyển sang [Bài 3: Lực đàn hồi Loadcell 5kg]!");
-              }
-            } else if (
-              trimmed.includes("MODE:sound") ||
-              trimmed.includes("AM THANH") ||
-              trimmed.includes("MAX4466") ||
-              trimmed.includes("Do to:")
-            ) {
-              if (activeExpRef.current !== "sound") {
-                setActiveExp("sound");
-                activeExpRef.current = "sound";
-                setStatusMsg("✨ ESP32: Tự động chuyển sang [Bài 1: Âm thanh MAX4466]!");
-              }
-            }
-
-            // Tín hiệu điều khiển trạng thái
-            if (trimmed.includes("MODE:menu")) {
-              setStatusMsg("ESP32 đang ở Menu chọn bài. Hãy bấm Nút 2 để chuyển bài, Nút 1 để vào bài!");
-              continue;
-            }
-            if (trimmed.includes(">> PAUSE")) {
-              setIsRecording(false);
-              isRecordingRef.current = false;
-              if (activeExpRef.current === "ohm" || activeExpRef.current === "sound") {
-                const valToSave = currentLiveValRef.current;
-                if (valToSave > 0) {
-                  autoAppendRecord(activeExpRef.current, valToSave);
+      // Mở cổng nếu chưa mở (port.readable === null nghĩa là chưa mở)
+      if (!port.readable) {
+        try {
+          await port.open({ baudRate: exp.baudRate });
+        } catch (openErr: any) {
+          if (
+            openErr.name === "InvalidStateError" ||
+            (openErr.message && openErr.message.toLowerCase().includes("already open"))
+          ) {
+            console.warn("SerialPort already open, reusing.");
+          } else {
+            // Nếu cổng cũ không mở được (VD đã rút cáp), và người dùng đang bấm nút -> mở hộp thoại chọn cổng mới
+            if (promptUser) {
+              // @ts-ignore
+              port = await navigator.serial.requestPort();
+              try {
+                await port.open({ baudRate: exp.baudRate });
+              } catch (err2: any) {
+                if (
+                  err2.name !== "InvalidStateError" &&
+                  !(err2.message && err2.message.toLowerCase().includes("already open"))
+                ) {
+                  throw err2;
                 }
               }
-              continue;
-            }
-            if (trimmed.includes(">> RUN")) {
-              setIsRecording(true);
-              isRecordingRef.current = true;
-              continue;
-            }
-            if (trimmed.includes(">> [HOLD]")) {
-              const lockedF = peakForceRef.current > 0.1 ? peakForceRef.current : currentLiveValRef.current;
-              if (lockedF > 0.05) {
-                autoAppendRecord("force", lockedF);
-                setStatusMsg(`✅ ESP32 đã khóa số đo lực (${lockedF} N) và TỰ ĐỘNG lưu vào Bảng Số Liệu!`);
-              } else {
-                setStatusMsg("ESP32 đã khóa số đo lực (HOLD) để dễ ghi chép!");
-              }
-              continue;
-            }
-            if (trimmed.includes(">> [UNHOLD]")) {
-              setStatusMsg("ESP32 đã mở khóa số đo, tiếp tục đo live!");
-              continue;
-            }
-            if (trimmed.includes(">> [RESET]")) {
-              lastPhotogateRunRef.current = null;
-              setLastPhotogateRun(null);
-              setStatusMsg("ESP32 đã Reset thành công! Sẵn sàng cho lượt thả xe mới.");
-              continue;
-            }
-            if (trimmed.includes(">> [TARE]")) {
-              setPeakForce(0);
-              setStatusMsg("ESP32 đã Tare lực kế về 0.00 N và xóa đỉnh cũ.");
-              continue;
-            }
-
-            // Đồng bộ khoảng cách s từ nút nhấn ESP32 lên Web
-            if (trimmed.includes(">> DIST:") || trimmed.includes("Da doi khoang cach s = ") || trimmed.includes("Da cap nhat khoang cach s = ")) {
-              const matchD = trimmed.match(/(?:DIST:|s\s*=\s*)([0-9]+(?:\.[0-9]+)?)/i);
-              if (matchD && matchD[1]) {
-                const newD = parseFloat(matchD[1]);
-                if (!isNaN(newD) && newD >= 5 && newD <= 200) {
-                  setParamValue(newD);
-                  setStatusMsg(`Hộp ESP32 đã đổi khoảng cách s = ${newD} cm!`);
-                  continue;
-                }
-              }
-            }
-
-            // Bắt điện áp thực tế U (V) từ cảm biến INA219 (đo nguồn pin 18650, USB hoặc ắc quy)
-            const matchU = trimmed.match(/(?:Dien ap U|U)[\s:=]+(-?\d+(?:\.\d+)?)/i);
-            if (matchU && matchU[1]) {
-              const measuredU = parseFloat(matchU[1]);
-              if (!isNaN(measuredU) && measuredU > 0.05 && measuredU < 30.0) {
-                setRealVoltage(measuredU);
-                if (activeExpRef.current === "ohm" && autoSyncOhmVoltageRef.current) {
-                  setParamValue(parseFloat(measuredU.toFixed(2)));
-                }
-              }
-            }
-
-            // Bắt trọn vẹn kết quả lượt chạy 2 Cổng quang điện (Photogate)
-            const isPhotogateData =
-              (trimmed.includes("Van toc") || trimmed.includes("v =") || trimmed.includes("v:") || trimmed.includes("KET QUA:")) &&
-              (trimmed.includes("Thoi gian") || trimmed.includes("t =") || trimmed.includes("t:"));
-
-            if (isPhotogateData) {
-              const matchVel = trimmed.match(/(?:Van toc\s*v|Van toc|v)[\s:=]+(-?\d+(?:\.\d+)?)/i);
-              const matchTime = trimmed.match(/(?:Thoi gian\s*t|Thoi gian|t)[\s:=]+(-?\d+(?:\.\d+)?)/i);
-              const matchS = trimmed.match(/(?:s|distance)[\s:=]+(-?\d+(?:\.\d+)?)/i);
-              let parsedSVal: number | null = null;
-              if (matchS && matchS[1]) {
-                const parsedS = parseFloat(matchS[1]);
-                if (!isNaN(parsedS) && parsedS >= 5) {
-                  parsedSVal = parsedS;
-                  setParamValue(parsedS);
-                }
-              }
-
-              if (matchVel && matchTime) {
-                const speedVal = parseFloat(matchVel[1]);
-                const timeVal = parseFloat(matchTime[1]);
-                const usedS = parsedSVal !== null ? parsedSVal : paramValueRef.current;
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-
-                // Kiểm tra chống nhận trùng lượt (khi ESP32 gửi lại cùng 1 kết quả)
-                const prevRun = lastPhotogateRunRef.current;
-                const isDuplicate =
-                  prevRun &&
-                  Math.abs(prevRun.speed - speedVal) < 0.001 &&
-                  Math.abs(prevRun.time - timeVal) < 0.0001;
-
-                if (!isDuplicate) {
-                  const newRun = {
-                    speed: speedVal,
-                    time: timeVal,
-                    timestamp: timeStr,
-                  };
-                  lastPhotogateRunRef.current = newRun;
-                  setLastPhotogateRun(newRun);
-
-                  const curTheory = EXPERIMENTS["ultrasonic"].calcTheory(usedS);
-                  const err = curTheory > 0
-                    ? parseFloat((Math.abs(speedVal - curTheory) / curTheory * 100).toFixed(2))
-                    : 0;
-
-                  // 1. Thêm ĐÚNG 1 ĐIỂM cho lượt chạy này vào đồ thị thời gian thực
-                  setTelemetryList((prev) => [
-                    ...prev.slice(-35),
-                    {
-                      time: timeVal,
-                      measured: speedVal,
-                      theory: parseFloat(curTheory.toFixed(2)),
-                      errorPct: err,
-                    },
-                  ]);
-
-                  // 2. TỰ ĐỘNG LƯU KẾT QUẢ VÀO BẢNG SỐ LIỆU THÍ NGHIỆM!
-                  autoAppendRecord("ultrasonic", speedVal, usedS, timeStr);
-                }
-
-                setCurrentLiveVal(speedVal);
-                setStatusMsg(`🎉 Đã bắt trọn lượt chạy: v = ${speedVal} cm/s | t = ${timeVal} s — Đã TỰ ĐỘNG lưu vào Bảng Số Liệu!`);
-                continue; // QUAN TRỌNG: Đã chốt lượt, KHÔNG để rơi xuống đoạn t += 0.1 rolling bên dưới!
-              }
-            }
-
-            // Bắt đỉnh lực kéo lò xo Loadcell (Peak Force)
-            const matchPeak = trimmed.match(/(?:Dinh|Peak)[\s:=]+(-?\d+(?:\.\d+)?)/i);
-            if (matchPeak && matchPeak[1]) {
-              const pVal = parseFloat(matchPeak[1]);
-              if (!isNaN(pVal) && pVal > 0) {
-                setPeakForce((prev) => Math.max(prev, pVal));
-              }
-            }
-
-            let parsedNum: number = NaN;
-            // 1. Nhận diện dòng điện I từ INA219
-            const matchI = trimmed.match(/(?:Dong dien I|I)[\s:=]+(-?\d+(?:\.\d+)?)/i);
-            if (matchI && matchI[1] && activeExpRef.current === "ohm") {
-              parsedNum = parseFloat(matchI[1]);
             } else {
-              // 2. Direct number check (e.g. "59.80" or "60")
-              const direct = parseFloat(trimmed);
-              if (!isNaN(direct) && /^-?\d+(\.\d+)?/.test(trimmed)) {
-                parsedNum = direct;
-              } else {
-                // 3. Intelligent pattern matching based on keywords in test / production output
-                const matchWithLabel = trimmed.match(/(?:Do to|Luc F|Luc|Van toc|v|d|I|s|F|m)[\s:=]+(-?\d+(?:\.\d+)?)/i);
-                if (matchWithLabel && matchWithLabel[1]) {
-                  parsedNum = parseFloat(matchWithLabel[1]);
-                } else {
-                  // Fallback: extract the first floating-point number in the line
-                  const matchAny = trimmed.match(/-?\d+(?:\.\d+)?/);
-                  if (matchAny) {
-                    parsedNum = parseFloat(matchAny[0]);
-                  }
-                }
-              }
-            }
-
-            if (!isNaN(parsedNum)) {
-              setCurrentLiveVal(parsedNum);
-              if (activeExpRef.current === "force" && parsedNum > 0.15) {
-                setPeakForce((prev) => Math.max(prev, parsedNum));
-              }
-
-              // If paused by student, do NOT append to rolling graph so readings stay frozen for inspection
-              if (!isRecordingRef.current) {
-                continue;
-              }
-
-              // QUAN TRỌNG:
-              // 1. Với bài 2 Cổng quang điện (ultrasonic): Đây là bài đo theo từng lượt xe chạy.
-              // Khi xe không chạy (chưa thả hoặc đã dừng ở cuối dốc), TUYỆT ĐỐI KHÔNG tự động tăng t += 0.1!
-              if (activeExpRef.current === "ultrasonic") {
-                continue;
-              }
-
-              // 2. Với bài Lực kế Loadcell (force):
-              // Khi lò xo ở trạng thái nghỉ (F < 0.08N), không cộng dồn t liên tục để tránh làm trôi mất đỉnh lực vừa kéo!
-              if (activeExpRef.current === "force" && parsedNum < 0.08) {
-                continue;
-              }
-
-              t += 0.1;
-              const curTheory = theoryValueRef.current;
-              const err = curTheory > 0
-                ? parseFloat((Math.abs(parsedNum - curTheory) / curTheory * 100).toFixed(2))
-                : 0;
-
-              setTelemetryList((prev) => [
-                ...prev.slice(-35),
-                {
-                  time: parseFloat(t.toFixed(1)),
-                  measured: parsedNum,
-                  theory: parseFloat(curTheory.toFixed(2)),
-                  errorPct: err,
-                },
-              ]);
+              return;
             }
           }
         }
       }
+
+      // Nếu port.readable đang bị khóa bởi một reader mồ côi từ phiên cũ, dùng port.forget() hoặc hủy reader cũ
+      if (port.readable && port.readable.locked) {
+        if (mgr.reader) {
+          try {
+            await mgr.reader.cancel();
+            mgr.reader.releaseLock();
+          } catch (e) {}
+          mgr.reader = null;
+        }
+      }
+
+      // Nếu vẫn bị khóa (do pipeTo từ bản code cũ trước khi F5), đóng/mở lại hoặc báo F5
+      if (port.readable && port.readable.locked) {
+        setExpMode("hardware");
+        setConnectionType("serial");
+        setConnectionStatus("connected");
+        setIsRecording(true);
+        isRecordingRef.current = true;
+        setStatusMsg("✓ Cổng USB Serial đang hoạt động!");
+        return;
+      }
+
+      mgr.port = port;
+      mgr.keepReading = true;
+      serialPortRef.current = port;
+      keepReadingRef.current = true;
+
+      setExpMode("hardware");
+      setConnectionType("serial");
+      setConnectionStatus("connected");
+      setIsRecording(true);
+      isRecordingRef.current = true;
+      setStatusMsg(`✓ Đã kết nối trực tiếp cổng USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu từ ESP32...`);
+
+      const reader = port.readable.getReader();
+      mgr.reader = reader;
+      mgr.isLoopRunning = true;
+      serialReaderRef.current = reader;
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (mgr.keepReading) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed && mgr.onLine) {
+              mgr.onLine(trimmed);
+            }
+          }
+        }
+      }
+
+      try {
+        reader.releaseLock();
+      } catch (e) {}
+      mgr.reader = null;
+      mgr.isLoopRunning = false;
     } catch (err: any) {
       console.error(err);
+      if (!promptUser) return;
       setConnectionStatus("disconnected");
-      if (err.message && err.message.toLowerCase().includes("already open")) {
-        setStatusMsg("⚠️ Cổng Serial đang bị giữ bởi trình duyệt hoặc ứng dụng khác (như Serial Monitor Arduino). Hãy bấm 'Đặt Lại Cổng' bên dưới để kết nối lại!");
-      } else {
-        setStatusMsg(`Không thể kết nối USB Serial: ${err.message || "Đã hủy chọn cổng"}`);
-      }
+      setStatusMsg(`Không thể kết nối USB Serial: ${err.message || "Hãy kiểm tra cáp USB và đóng Serial Monitor trên Arduino IDE"}`);
     }
+  };
+
+  // Tự động kết nối lại cổng ESP32 ngay khi tải trang (nếu trình duyệt đã từng được cấp quyền)
+  useEffect(() => {
+    connectSerialInternal(false);
+  }, []);
+
+  // Web Serial API button handler
+  const handleConnectSerial = async () => {
+    await connectSerialInternal(true);
   };
 
   // Reset Serial Port Cleanly
   const handleResetSerialPort = async () => {
+    const mgr = getGlobalSerialMgr();
+    if (mgr) {
+      mgr.keepReading = false;
+      mgr.isLoopRunning = false;
+      if (mgr.reader) {
+        try {
+          await mgr.reader.cancel();
+          mgr.reader.releaseLock();
+        } catch (e) {}
+        mgr.reader = null;
+      }
+      if (mgr.port) {
+        try {
+          await mgr.port.close();
+        } catch (e) {}
+        mgr.port = null;
+      }
+    }
     keepReadingRef.current = false;
     isRecordingRef.current = false;
     if (serialReaderRef.current) {
@@ -1532,7 +1736,11 @@ export default function VernierIoTPage() {
       serialPortRef.current = null;
     }
     setConnectionStatus("disconnected");
-    setStatusMsg("Đã giải phóng và đặt lại cổng USB Serial! Hãy bấm 'Cắm USB Serial' để kết nối lại.");
+    setConnectionType("none");
+    setStatusMsg("Đã đặt lại cổng USB Serial! Đang mở bảng chọn cổng kết nối lại...");
+    setTimeout(() => {
+      connectSerialInternal(true);
+    }, 150);
   };
 
   // Web Bluetooth API handler
@@ -1566,22 +1774,30 @@ export default function VernierIoTPage() {
 
   // Disconnect handler
   const handleDisconnect = async () => {
+    const mgr = getGlobalSerialMgr();
+    if (mgr) {
+      mgr.keepReading = false;
+      mgr.isLoopRunning = false;
+      if (mgr.reader) {
+        try {
+          await mgr.reader.cancel();
+          mgr.reader.releaseLock();
+        } catch (e) {}
+        mgr.reader = null;
+      }
+      if (mgr.port) {
+        try {
+          await mgr.port.close();
+        } catch (e) {}
+        mgr.port = null;
+      }
+    }
     keepReadingRef.current = false;
     isRecordingRef.current = false;
-    if (serialReaderRef.current) {
-      try {
-        await serialReaderRef.current.cancel();
-        serialReaderRef.current.releaseLock();
-      } catch (e) {}
-      serialReaderRef.current = null;
-    }
-    if (serialPortRef.current) {
-      try {
-        await serialPortRef.current.close();
-      } catch (e) {}
-      serialPortRef.current = null;
-    }
+    serialPortRef.current = null;
+    serialReaderRef.current = null;
     setIsRecording(false);
+    setEspBoxMode(null);
     if (expMode === "hardware") {
       setConnectionType("none");
       setConnectionStatus("disconnected");
@@ -1794,14 +2010,25 @@ export default function VernierIoTPage() {
             <button
               onClick={() => {
                 setExpMode("hardware");
-                if (connectionType === "simulator") {
+                const mgr = getGlobalSerialMgr();
+                if (mgr && mgr.port && mgr.isLoopRunning) {
+                  serialPortRef.current = mgr.port;
+                  serialReaderRef.current = mgr.reader;
+                  keepReadingRef.current = true;
+                  setConnectionType("serial");
+                  setConnectionStatus("connected");
+                  setIsRecording(true);
+                  isRecordingRef.current = true;
+                  setStatusMsg(`✓ Đang kết nối trực tiếp USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu từ ESP32...`);
+                } else {
                   setConnectionType("none");
                   setConnectionStatus("disconnected");
                   setIsRecording(false);
                   isRecordingRef.current = false;
                   setTelemetryList([]);
+                  setStatusMsg("Chế độ 1: Cảm biến Phần cứng thật. Hãy bấm 'Cắm USB Serial' để đọc dữ liệu ESP32.");
+                  connectSerialInternal(false);
                 }
-                setStatusMsg("Chế độ 1: Cảm biến Phần cứng thật. Vui lòng cắm cáp USB Serial kết nối ESP32.");
               }}
               className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold text-left transition-all ${
                 expMode === "hardware"
@@ -1822,7 +2049,7 @@ export default function VernierIoTPage() {
                   )}
                 </div>
                 <div className="text-[11px] font-normal text-slate-500 dark:text-slate-400 truncate">
-                  Đo trực tiếp từ cảm biến INA219, HC-SR04, Mic qua ESP32 USB Serial
+                  Đo trực tiếp từ cảm biến INA219, 2 Cổng quang, Loadcell, Mic qua ESP32 USB Serial
                 </div>
               </div>
             </button>
@@ -1830,20 +2057,11 @@ export default function VernierIoTPage() {
             <button
               onClick={() => {
                 setExpMode("simulator");
-                if (serialPortRef.current) {
-                  keepReadingRef.current = false;
-                  if (serialReaderRef.current) {
-                    try { serialReaderRef.current.cancel(); } catch (e) {}
-                  }
-                  try { serialPortRef.current.close(); } catch (e) {}
-                  serialPortRef.current = null;
-                  serialReaderRef.current = null;
-                }
                 setConnectionType("simulator");
                 setConnectionStatus("connected");
                 setIsRecording(true);
                 isRecordingRef.current = true;
-                setStatusMsg("Chế độ 2: Đang chạy mô phỏng thực nghiệm ảo (Digital Twin) theo SGK...");
+                setStatusMsg("Chế độ 2: Đang chạy mô phỏng thực nghiệm ảo (Digital Twin) theo SGK — Tự động lưu kết quả vào bảng...");
               }}
               className={`flex items-center gap-3 py-3 px-4 rounded-xl font-bold text-left transition-all ${
                 expMode === "simulator"
@@ -1864,7 +2082,7 @@ export default function VernierIoTPage() {
                   )}
                 </div>
                 <div className="text-[11px] font-normal text-slate-500 dark:text-slate-400 truncate">
-                  Digital Twin cho học sinh thực hành lý thuyết &amp; kéo thanh trượt trực tuyến
+                  Digital Twin cho học sinh thực hành lý thuyết &amp; tự động ghi bảng số liệu
                 </div>
               </div>
             </button>
@@ -1875,24 +2093,36 @@ export default function VernierIoTPage() {
             {(Object.keys(EXPERIMENTS) as ExperimentType[]).map((key) => {
               const item = EXPERIMENTS[key];
               const isSelected = activeExp === key;
+              const isBoxRunningThis = connectionType === "serial" && espBoxMode === key;
               return (
                 <button
                   key={key}
-                  onClick={() => setActiveExp(key)}
+                  onClick={() => {
+                    setActiveExp(key);
+                    activeExpRef.current = key;
+                    sendSerialCommand(`MODE:${key}`);
+                  }}
                   className={`p-3 rounded-2xl border text-left transition-all flex flex-col gap-1 ${
                     isSelected
                       ? "bg-white dark:bg-slate-900 border-sky-500 shadow-md ring-2 ring-sky-500/20"
                       : "bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-900"
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-sky-600">
-                      {item.grade}
-                    </span>
-                    {key === "sound" && <Waves className="w-4 h-4 text-sky-500" />}
-                    {key === "ultrasonic" && <Activity className="w-4 h-4 text-emerald-500" />}
-                    {key === "force" && <Gauge className="w-4 h-4 text-amber-500" />}
-                    {key === "ohm" && <Zap className="w-4 h-4 text-purple-500" />}
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-sky-600">
+                        {item.grade}
+                      </span>
+                      {isBoxRunningThis && (
+                        <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 animate-pulse">
+                          ● Hộp ESP32
+                        </span>
+                      )}
+                    </div>
+                    {key === "sound" && <Waves className="w-4 h-4 text-sky-500 shrink-0" />}
+                    {key === "ultrasonic" && <Activity className="w-4 h-4 text-emerald-500 shrink-0" />}
+                    {key === "force" && <Gauge className="w-4 h-4 text-amber-500 shrink-0" />}
+                    {key === "ohm" && <Zap className="w-4 h-4 text-purple-500 shrink-0" />}
                   </div>
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-1 mt-1">
                     {item.title}
@@ -1904,6 +2134,37 @@ export default function VernierIoTPage() {
               );
             })}
           </div>
+
+          {/* Cảnh báo thông minh khi màn hình OLED trên hộp ESP32 đang ở bài khác với tab trên Web */}
+          {expMode === "hardware" &&
+            connectionType === "serial" &&
+            espBoxMode &&
+            espBoxMode !== "menu" &&
+            espBoxMode !== activeExp && (
+              <div className="w-full rounded-2xl bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-400 dark:border-amber-700 p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
+                <div className="flex items-start sm:items-center gap-2.5 text-amber-950 dark:text-amber-200">
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                  <div>
+                    <div className="font-extrabold text-xs sm:text-sm">
+                      📟 Màn hình OLED trên hộp ESP32 đang chạy [{EXPERIMENTS[espBoxMode].title}]!
+                    </div>
+                    <div className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
+                      Để chuyển hộp sang đo <strong>{exp.title}</strong>: Hãy bấm <strong>Nút xanh bên phải (Nút 2)</strong> trên hộp để về Menu → chọn đúng bài → bấm <strong>Nút xanh bên trái (Nút 1)</strong> để vào bài! (Số liệu của bài đang chạy trên hộp vẫn đang được tự động lưu ngầm vào bảng).
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveExp(espBoxMode);
+                    activeExpRef.current = espBoxMode;
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-all shrink-0 cursor-pointer"
+                >
+                  📺 Xem ngay [{EXPERIMENTS[espBoxMode].grade}] đang chạy trên hộp
+                </button>
+              </div>
+            )}
 
           {/* Live Peripheral Telemetry Status Banner */}
           <div className="w-full rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 flex flex-wrap items-center justify-between gap-4 shadow-xs text-xs">
