@@ -1074,9 +1074,40 @@ export default function VernierIoTPage() {
       setConnectionStatus("connecting");
       setStatusMsg("Đang yêu cầu chọn cổng COM/USB...");
 
+      // 1. Dọn dẹp an toàn reader cũ nếu đang chạy
+      keepReadingRef.current = false;
+      if (serialReaderRef.current) {
+        try {
+          await serialReaderRef.current.cancel();
+          serialReaderRef.current.releaseLock();
+        } catch (e) {}
+        serialReaderRef.current = null;
+      }
+
+      // 2. Lấy cổng COM: Nếu đã chọn trước đó thì tái sử dụng, hoặc yêu cầu chọn cổng
       // @ts-ignore
-      const port = await navigator.serial.requestPort();
-      await port.open({ baudRate: exp.baudRate });
+      let port = serialPortRef.current;
+      if (!port) {
+        // @ts-ignore
+        port = await navigator.serial.requestPort();
+      }
+
+      // 3. Mở cổng với cơ chế chống lỗi "The port is already open"
+      try {
+        await port.open({ baudRate: exp.baudRate });
+      } catch (openErr: any) {
+        // Nếu cổng đã mở sẵn trong bộ nhớ trình duyệt, ta bỏ qua lỗi và tái sử dụng ngay!
+        if (
+          openErr.name === "InvalidStateError" ||
+          (openErr.message && openErr.message.toLowerCase().includes("already open"))
+        ) {
+          console.warn("SerialPort was already open. Reusing existing open port.");
+        } else {
+          // Lỗi thật sự (VD: bị chiếm bởi ứng dụng khác ngoài Chrome)
+          serialPortRef.current = null;
+          throw openErr;
+        }
+      }
 
       serialPortRef.current = port;
       keepReadingRef.current = true;
@@ -1085,23 +1116,32 @@ export default function VernierIoTPage() {
       setConnectionStatus("connected");
       setIsRecording(true);
       isRecordingRef.current = true;
-      setStatusMsg(`Đã kết nối trực tiếp cổng USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu...`);
+      setStatusMsg(`✓ Đã kết nối trực tiếp cổng USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu...`);
 
-      // Start reading stream
-      // @ts-ignore
-      const textDecoder = new TextDecoderStream();
-      port.readable.pipeTo(textDecoder.writable);
-      const reader = textDecoder.readable.getReader();
+      // 4. Giải phóng khóa stream cũ nếu có trước khi đọc mới
+      if (port.readable && port.readable.locked) {
+        try {
+          const tempReader = port.readable.getReader();
+          tempReader.releaseLock();
+        } catch (e) {}
+      }
+
+      // Đọc trực tiếp qua getReader() & TextDecoder (chuẩn W3C Web Serial, không bị kẹt khóa pipeTo)
+      const reader = port.readable.getReader();
       serialReaderRef.current = reader;
+      const decoder = new TextDecoder();
 
       let buffer = "";
       let t = 0;
 
       while (keepReadingRef.current) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          try { reader.releaseLock(); } catch (e) {}
+          break;
+        }
         if (value) {
-          buffer += value;
+          buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
 
@@ -1109,33 +1149,58 @@ export default function VernierIoTPage() {
             const trimmed = line.trim();
             if (!trimmed) continue;
 
-            // Auto Mode Switch from ESP32 All-in-One Master firmware
+            // Tự động nhận diện và chuyển bài thí nghiệm tương ứng với cảm biến trên bo mạch
+            if (
+              trimmed.includes("MODE:ultrasonic") ||
+              trimmed.includes("2 CONG QUANG") ||
+              trimmed.includes("CONG A:") ||
+              trimmed.includes("TOC DO IR") ||
+              ((trimmed.includes("Van toc") || trimmed.includes("v =")) && (trimmed.includes("Thoi gian") || trimmed.includes("t =")))
+            ) {
+              if (activeExpRef.current !== "ultrasonic") {
+                setActiveExp("ultrasonic");
+                activeExpRef.current = "ultrasonic";
+                setStatusMsg("✨ ESP32: Tự động chuyển sang [Bài 2: Tốc độ 2 Cổng quang điện]!");
+              }
+            } else if (
+              trimmed.includes("MODE:ohm") ||
+              trimmed.includes("DINH LUAT OHM") ||
+              trimmed.includes("INA219") ||
+              (trimmed.includes("Dong dien I:") && (trimmed.includes("Dien ap U:") || trimmed.includes("U =") || trimmed.includes("Ohm")))
+            ) {
+              if (activeExpRef.current !== "ohm") {
+                setActiveExp("ohm");
+                activeExpRef.current = "ohm";
+                setStatusMsg("✨ ESP32: Tự động chuyển sang [Bài 4: Khảo sát Định luật Ôm INA219]!");
+              }
+            } else if (
+              trimmed.includes("MODE:force") ||
+              trimmed.includes("LOADCELL") ||
+              trimmed.includes("LUC KE") ||
+              trimmed.includes("HX711") ||
+              trimmed.includes("Luc F:")
+            ) {
+              if (activeExpRef.current !== "force") {
+                setActiveExp("force");
+                activeExpRef.current = "force";
+                setStatusMsg("✨ ESP32: Tự động chuyển sang [Bài 3: Lực đàn hồi Loadcell 5kg]!");
+              }
+            } else if (
+              trimmed.includes("MODE:sound") ||
+              trimmed.includes("AM THANH") ||
+              trimmed.includes("MAX4466") ||
+              trimmed.includes("Do to:")
+            ) {
+              if (activeExpRef.current !== "sound") {
+                setActiveExp("sound");
+                activeExpRef.current = "sound";
+                setStatusMsg("✨ ESP32: Tự động chuyển sang [Bài 1: Âm thanh MAX4466]!");
+              }
+            }
+
+            // Tín hiệu điều khiển trạng thái
             if (trimmed.includes("MODE:menu")) {
               setStatusMsg("ESP32 đang ở Menu chọn bài. Hãy bấm Nút 2 để chuyển bài, Nút 1 để vào bài!");
-              continue;
-            }
-            if (trimmed.includes("MODE:sound")) {
-              setActiveExp("sound");
-              activeExpRef.current = "sound";
-              setStatusMsg("ESP32 đã chuyển sang [Bài 1: Âm thanh MAX4466]");
-              continue;
-            }
-            if (trimmed.includes("MODE:ultrasonic")) {
-              setActiveExp("ultrasonic");
-              activeExpRef.current = "ultrasonic";
-              setStatusMsg("ESP32 đã chuyển sang [Bài 2: Tốc độ 2 Cổng quang]");
-              continue;
-            }
-            if (trimmed.includes("MODE:force")) {
-              setActiveExp("force");
-              activeExpRef.current = "force";
-              setStatusMsg("ESP32 đã chuyển sang [Bài 3: Lực đàn hồi Loadcell 5kg]");
-              continue;
-            }
-            if (trimmed.includes("MODE:ohm")) {
-              setActiveExp("ohm");
-              activeExpRef.current = "ohm";
-              setStatusMsg("ESP32 đã chuyển sang [Bài 4: Định luật Ôm INA219]");
               continue;
             }
             if (trimmed.includes(">> PAUSE")) {
@@ -1181,10 +1246,10 @@ export default function VernierIoTPage() {
             }
 
             // Bắt điện áp thực tế U (V) từ cảm biến INA219 (đo nguồn pin 18650, USB hoặc ắc quy)
-            const matchU = trimmed.match(/(?:U\s*=|U\s*:)\s*(-?\d+(?:\.\d+)?)/i);
+            const matchU = trimmed.match(/(?:Dien ap U|U)[\s:=]+(-?\d+(?:\.\d+)?)/i);
             if (matchU && matchU[1]) {
               const measuredU = parseFloat(matchU[1]);
-              if (!isNaN(measuredU) && measuredU > 0.5 && measuredU < 30.0) {
+              if (!isNaN(measuredU) && measuredU > 0.05 && measuredU < 30.0) {
                 setRealVoltage(measuredU);
                 if (activeExpRef.current === "ohm" && autoSyncOhmVoltageRef.current) {
                   setParamValue(parseFloat(measuredU.toFixed(2)));
@@ -1193,10 +1258,14 @@ export default function VernierIoTPage() {
             }
 
             // Bắt trọn vẹn kết quả lượt chạy 2 Cổng quang điện (Photogate)
-            if (trimmed.includes("Van toc:") && trimmed.includes("Thoi gian t:")) {
-              const matchVel = trimmed.match(/Van toc:\s*(-?\d+(?:\.\d+)?)/i);
-              const matchTime = trimmed.match(/Thoi gian t:\s*(-?\d+(?:\.\d+)?)/i);
-              const matchS = trimmed.match(/s\s*=\s*(-?\d+(?:\.\d+)?)/i);
+            const isPhotogateData =
+              (trimmed.includes("Van toc") || trimmed.includes("v =") || trimmed.includes("v:") || trimmed.includes("KET QUA:")) &&
+              (trimmed.includes("Thoi gian") || trimmed.includes("t =") || trimmed.includes("t:"));
+
+            if (isPhotogateData) {
+              const matchVel = trimmed.match(/(?:Van toc\s*v|Van toc|v)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+              const matchTime = trimmed.match(/(?:Thoi gian\s*t|Thoi gian|t)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+              const matchS = trimmed.match(/(?:s|distance)[\s:=]+(-?\d+(?:\.\d+)?)/i);
               if (matchS && matchS[1]) {
                 const parsedS = parseFloat(matchS[1]);
                 if (!isNaN(parsedS) && parsedS >= 5) {
@@ -1246,7 +1315,7 @@ export default function VernierIoTPage() {
             }
 
             // Bắt đỉnh lực kéo lò xo Loadcell (Peak Force)
-            const matchPeak = trimmed.match(/Dinh:\s*(-?\d+(?:\.\d+)?)/i);
+            const matchPeak = trimmed.match(/(?:Dinh|Peak)[\s:=]+(-?\d+(?:\.\d+)?)/i);
             if (matchPeak && matchPeak[1]) {
               const pVal = parseFloat(matchPeak[1]);
               if (!isNaN(pVal) && pVal > 0) {
@@ -1255,21 +1324,26 @@ export default function VernierIoTPage() {
             }
 
             let parsedNum: number = NaN;
-            // 1. Direct number check (e.g. "59.80" or "60")
-            const direct = parseFloat(trimmed);
-            if (!isNaN(direct) && /^-?\d+(\.\d+)?/.test(trimmed)) {
-              parsedNum = direct;
+            // 1. Nhận diện dòng điện I từ INA219
+            const matchI = trimmed.match(/(?:Dong dien I|I)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+            if (matchI && matchI[1] && activeExpRef.current === "ohm") {
+              parsedNum = parseFloat(matchI[1]);
             } else {
-              // 2. Intelligent pattern matching based on keywords in test / production output
-              // Matches: "Do to: 59.8", "Luc: 0.98", "v = 35.2", "v: 35.2", "KET QUA: ...", etc.
-              const matchWithLabel = trimmed.match(/(?:Do to|Luc|Van toc|v|d|I|s|F|m)[\s:=]+(-?\d+(?:\.\d+)?)/i);
-              if (matchWithLabel && matchWithLabel[1]) {
-                parsedNum = parseFloat(matchWithLabel[1]);
+              // 2. Direct number check (e.g. "59.80" or "60")
+              const direct = parseFloat(trimmed);
+              if (!isNaN(direct) && /^-?\d+(\.\d+)?/.test(trimmed)) {
+                parsedNum = direct;
               } else {
-                // Fallback: extract the first floating-point number in the line
-                const matchAny = trimmed.match(/-?\d+(?:\.\d+)?/);
-                if (matchAny) {
-                  parsedNum = parseFloat(matchAny[0]);
+                // 3. Intelligent pattern matching based on keywords in test / production output
+                const matchWithLabel = trimmed.match(/(?:Do to|Luc F|Luc|Van toc|v|d|I|s|F|m)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+                if (matchWithLabel && matchWithLabel[1]) {
+                  parsedNum = parseFloat(matchWithLabel[1]);
+                } else {
+                  // Fallback: extract the first floating-point number in the line
+                  const matchAny = trimmed.match(/-?\d+(?:\.\d+)?/);
+                  if (matchAny) {
+                    parsedNum = parseFloat(matchAny[0]);
+                  }
                 }
               }
             }
@@ -1320,8 +1394,33 @@ export default function VernierIoTPage() {
     } catch (err: any) {
       console.error(err);
       setConnectionStatus("disconnected");
-      setStatusMsg(`Không thể kết nối USB Serial: ${err.message || "Đã hủy chọn cổng"}`);
+      if (err.message && err.message.toLowerCase().includes("already open")) {
+        setStatusMsg("⚠️ Cổng Serial đang bị giữ bởi trình duyệt hoặc ứng dụng khác (như Serial Monitor Arduino). Hãy bấm 'Đặt Lại Cổng' bên dưới để kết nối lại!");
+      } else {
+        setStatusMsg(`Không thể kết nối USB Serial: ${err.message || "Đã hủy chọn cổng"}`);
+      }
     }
+  };
+
+  // Reset Serial Port Cleanly
+  const handleResetSerialPort = async () => {
+    keepReadingRef.current = false;
+    isRecordingRef.current = false;
+    if (serialReaderRef.current) {
+      try {
+        await serialReaderRef.current.cancel();
+        serialReaderRef.current.releaseLock();
+      } catch (e) {}
+      serialReaderRef.current = null;
+    }
+    if (serialPortRef.current) {
+      try {
+        await serialPortRef.current.close();
+      } catch (e) {}
+      serialPortRef.current = null;
+    }
+    setConnectionStatus("disconnected");
+    setStatusMsg("Đã giải phóng và đặt lại cổng USB Serial! Hãy bấm 'Cắm USB Serial' để kết nối lại.");
   };
 
   // Web Bluetooth API handler
@@ -1360,15 +1459,16 @@ export default function VernierIoTPage() {
     if (serialReaderRef.current) {
       try {
         await serialReaderRef.current.cancel();
+        serialReaderRef.current.releaseLock();
       } catch (e) {}
+      serialReaderRef.current = null;
     }
     if (serialPortRef.current) {
       try {
         await serialPortRef.current.close();
       } catch (e) {}
+      serialPortRef.current = null;
     }
-    serialPortRef.current = null;
-    serialReaderRef.current = null;
     setIsRecording(false);
     if (expMode === "hardware") {
       setConnectionType("none");
@@ -1728,9 +1828,28 @@ export default function VernierIoTPage() {
               </div>
             </div>
 
-            <div className="font-mono text-[11px] text-sky-700 dark:text-sky-400 font-bold flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              <span>{statusMsg}</span>
+            <div className="font-mono text-[11px] font-bold flex items-center gap-2 flex-wrap">
+              {statusMsg.includes("Không thể") || statusMsg.includes("⚠️") || statusMsg.includes("Lỗi") ? (
+                <>
+                  <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                    <span>{statusMsg}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetSerialPort}
+                    className="px-2.5 py-1 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 text-[11px] font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Đặt Lại Cổng Serial &amp; Thử Lại</span>
+                  </button>
+                </>
+              ) : (
+                <div className="flex items-center gap-1.5 text-sky-700 dark:text-sky-400">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+                  <span>{statusMsg}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

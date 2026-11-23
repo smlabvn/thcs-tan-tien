@@ -820,41 +820,129 @@
       ctx.stroke();
     }
 
+    let singleFilePort = null;
+    let singleFileReader = null;
+
     async function handleSerialToggle() {
       if (!("serial" in navigator)) {
         alert("Trình duyệt chưa hỗ trợ Web Serial. Vui lòng mở bằng Google Chrome hoặc Microsoft Edge trên máy tính!");
         return;
       }
       try {
-        const port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 115200 });
+        if (singleFileReader) {
+          try {
+            await singleFileReader.cancel();
+            singleFileReader.releaseLock();
+          } catch (e) {}
+          singleFileReader = null;
+        }
+
+        let port = singleFilePort;
+        if (!port) {
+          // @ts-ignore
+          port = await navigator.serial.requestPort();
+        }
+
+        try {
+          await port.open({ baudRate: 115200 });
+        } catch (openErr) {
+          if (openErr.name === "InvalidStateError" || (openErr.message && openErr.message.toLowerCase().includes("already open"))) {
+            console.warn("Port was already open. Reusing port.");
+          } else {
+            singleFilePort = null;
+            throw openErr;
+          }
+        }
+
+        singleFilePort = port;
         if (iotSimInterval) clearInterval(iotSimInterval);
         document.getElementById('iotStatusBadge').textContent = 'Đã kết nối USB Serial (115200 bps)';
         document.getElementById('btnSerialConnect').textContent = '✓ Đang nhận từ bo mạch';
 
-        const textDecoder = new TextDecoderStream();
-        port.readable.pipeTo(textDecoder.writable);
-        const reader = textDecoder.readable.getReader();
+        if (port.readable && port.readable.locked) {
+          try {
+            const tempReader = port.readable.getReader();
+            tempReader.releaseLock();
+          } catch (e) {}
+        }
+
+        const reader = port.readable.getReader();
+        singleFileReader = reader;
+        const decoder = new TextDecoder();
         let buffer = "";
 
         while (true) {
           const { value, done } = await reader.read();
-          if (done) break;
-          buffer += value;
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            const num = parseFloat(line.trim());
-            if (!isNaN(num)) {
-              document.getElementById('live-i').textContent = num.toFixed(1);
-              waveData.push(num);
-              if (waveData.length > 80) waveData.shift();
-              drawIoTWave();
+          if (done) {
+            try { reader.releaseLock(); } catch(e) {}
+            break;
+          }
+          if (value) {
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+
+              let uVal = null;
+              let iVal = null;
+              let rVal = null;
+
+              // Parse U (V)
+              const matchU = trimmed.match(/(?:Dien ap U|U)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+              if (matchU && matchU[1]) uVal = parseFloat(matchU[1]);
+
+              // Parse I (mA)
+              const matchI = trimmed.match(/(?:Dong dien I|I)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+              if (matchI && matchI[1]) iVal = parseFloat(matchI[1]);
+
+              // Parse R (Ohm)
+              const matchR = trimmed.match(/(?:R do duoc|R)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+              if (matchR && matchR[1]) rVal = parseFloat(matchR[1]);
+
+              // Parse Photogate
+              const matchVel = trimmed.match(/(?:Van toc|v)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+              if (matchVel && matchVel[1] && iVal === null) {
+                iVal = parseFloat(matchVel[1]);
+              }
+
+              // Fallback parse float
+              if (iVal === null) {
+                const direct = parseFloat(trimmed);
+                if (!isNaN(direct) && /^-?\d+(\.\d+)?/.test(trimmed)) {
+                  iVal = direct;
+                }
+              }
+
+              if (iVal !== null && !isNaN(iVal)) {
+                document.getElementById('live-i').textContent = iVal.toFixed(1);
+                waveData.push(iVal);
+                if (waveData.length > 80) waveData.shift();
+                drawIoTWave();
+
+                if (uVal !== null && !isNaN(uVal)) {
+                  document.getElementById('live-u').textContent = uVal.toFixed(2);
+                  if (rVal === null && iVal > 0.5) {
+                    rVal = (uVal / (iVal / 1000.0));
+                  }
+                }
+
+                if (rVal !== null && !isNaN(rVal)) {
+                  document.getElementById('live-r').textContent = rVal.toFixed(1);
+                }
+
+                const curU = uVal !== null ? uVal : parseFloat(document.getElementById('live-u').textContent || '5');
+                const curP = (curU * (iVal / 1000.0));
+                document.getElementById('live-p').textContent = curP.toFixed(3);
+              }
             }
           }
         }
       } catch (e) {
-        alert("Lỗi kết nối Serial: " + (e.message || e));
+        document.getElementById('iotStatusBadge').textContent = 'Lỗi kết nối';
+        document.getElementById('btnSerialConnect').textContent = '🔌 Thử kết nối lại';
+        alert("Lỗi kết nối Serial: " + (e.message || e) + "\n\n💡 Mẹo: Nếu đang mở Serial Monitor trong Arduino IDE, hãy ĐÓNG Serial Monitor lại để trình duyệt có thể truy cập cổng COM!");
       }
     }
 
