@@ -732,6 +732,88 @@ export default function VernierIoTPage() {
     autoSyncOhmVoltageRef.current = autoSyncOhmVoltage;
   }, [autoSyncOhmVoltage]);
 
+  const paramValueRef = useRef<number>(paramValue);
+  useEffect(() => {
+    paramValueRef.current = paramValue;
+  }, [paramValue]);
+
+  const currentLiveValRef = useRef<number>(currentLiveVal);
+  useEffect(() => {
+    currentLiveValRef.current = currentLiveVal;
+  }, [currentLiveVal]);
+
+  const peakForceRef = useRef<number>(peakForce);
+  useEffect(() => {
+    peakForceRef.current = peakForce;
+  }, [peakForce]);
+
+  const lastPhotogateRunRef = useRef<{ speed: number; time: number; timestamp: string } | null>(lastPhotogateRun);
+  useEffect(() => {
+    lastPhotogateRunRef.current = lastPhotogateRun;
+  }, [lastPhotogateRun]);
+
+  // Tự động tải lại số liệu đã lưu từ trình duyệt (localStorage)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("physix_iot_recorded_points");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRecordedPoints(parsed);
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Tự động lưu số liệu vào localStorage mỗi khi bảng cập nhật
+  useEffect(() => {
+    try {
+      localStorage.setItem("physix_iot_recorded_points", JSON.stringify(recordedPoints));
+    } catch {}
+  }, [recordedPoints]);
+
+  // Hàm tự động ghi kết quả đo vào Bảng Số Liệu (Auto-Record)
+  const autoAppendRecord = (
+    expId: ExperimentType,
+    measuredVal: number,
+    customParamVal?: number,
+    customTimeStr?: string
+  ) => {
+    if (isNaN(measuredVal) || measuredVal <= 0) return;
+    const cfg = EXPERIMENTS[expId];
+    const pVal = customParamVal !== undefined ? customParamVal : paramValueRef.current;
+    const theory = parseFloat(cfg.calcTheory(pVal).toFixed(2));
+    const absError = parseFloat(Math.abs(measuredVal - theory).toFixed(2));
+    const errPct = theory > 0 ? parseFloat(((absError / theory) * 100).toFixed(2)) : 0;
+    const now = new Date();
+    const timeStr =
+      customTimeStr ||
+      now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+    setRecordedPoints((prev) => {
+      const sameExpCount = prev.filter((r) => r.experimentId === expId).length;
+      const newPoint: RecordedPoint = {
+        id: Date.now() + Math.floor(Math.random() * 10000),
+        trialIndex: sameExpCount + 1,
+        timestamp: timeStr,
+        experimentId: expId,
+        experimentTitle: cfg.title,
+        paramName: cfg.paramName,
+        paramValue: pVal,
+        paramUnit: cfg.paramUnit,
+        measured: measuredVal,
+        theory: theory,
+        unit: cfg.defaultUnit,
+        absError: absError,
+        errorPct: errPct,
+      };
+      return [...prev, newPoint];
+    });
+
+    setSaveSuccessMsg(`✅ Đã TỰ ĐỘNG lưu kết quả ${measuredVal} ${cfg.defaultUnit} vào Bảng Số Liệu!`);
+    setTimeout(() => setSaveSuccessMsg(null), 4000);
+  };
+
   // Active records for current experiment tab
   const activeRecords = recordedPoints.filter((r) => r.experimentId === activeExp);
 
@@ -841,7 +923,9 @@ export default function VernierIoTPage() {
           },
         ]);
 
-        setStatusMsg(`🎉 Xe đã qua Cổng B: v = ${simSpeed} cm/s | t = ${simTime} s! Hãy bấm "Lưu Lượt Chạy".`);
+        // TỰ ĐỘNG GHI VÀO BẢNG SỐ LIỆU THÍ NGHIỆM!
+        autoAppendRecord("ultrasonic", simSpeed, paramValue, timeStr);
+        setStatusMsg(`🎉 Xe đã qua Cổng B: v = ${simSpeed} cm/s | t = ${simTime} s — Đã TỰ ĐỘNG lưu vào bảng!`);
       }
     }, 25);
   };
@@ -1206,6 +1290,12 @@ export default function VernierIoTPage() {
             if (trimmed.includes(">> PAUSE")) {
               setIsRecording(false);
               isRecordingRef.current = false;
+              if (activeExpRef.current === "ohm" || activeExpRef.current === "sound") {
+                const valToSave = currentLiveValRef.current;
+                if (valToSave > 0) {
+                  autoAppendRecord(activeExpRef.current, valToSave);
+                }
+              }
               continue;
             }
             if (trimmed.includes(">> RUN")) {
@@ -1214,7 +1304,13 @@ export default function VernierIoTPage() {
               continue;
             }
             if (trimmed.includes(">> [HOLD]")) {
-              setStatusMsg("ESP32 đã khóa số đo lực (HOLD) để dễ ghi chép!");
+              const lockedF = peakForceRef.current > 0.1 ? peakForceRef.current : currentLiveValRef.current;
+              if (lockedF > 0.05) {
+                autoAppendRecord("force", lockedF);
+                setStatusMsg(`✅ ESP32 đã khóa số đo lực (${lockedF} N) và TỰ ĐỘNG lưu vào Bảng Số Liệu!`);
+              } else {
+                setStatusMsg("ESP32 đã khóa số đo lực (HOLD) để dễ ghi chép!");
+              }
               continue;
             }
             if (trimmed.includes(">> [UNHOLD]")) {
@@ -1222,6 +1318,7 @@ export default function VernierIoTPage() {
               continue;
             }
             if (trimmed.includes(">> [RESET]")) {
+              lastPhotogateRunRef.current = null;
               setLastPhotogateRun(null);
               setStatusMsg("ESP32 đã Reset thành công! Sẵn sàng cho lượt thả xe mới.");
               continue;
@@ -1266,9 +1363,11 @@ export default function VernierIoTPage() {
               const matchVel = trimmed.match(/(?:Van toc\s*v|Van toc|v)[\s:=]+(-?\d+(?:\.\d+)?)/i);
               const matchTime = trimmed.match(/(?:Thoi gian\s*t|Thoi gian|t)[\s:=]+(-?\d+(?:\.\d+)?)/i);
               const matchS = trimmed.match(/(?:s|distance)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+              let parsedSVal: number | null = null;
               if (matchS && matchS[1]) {
                 const parsedS = parseFloat(matchS[1]);
                 if (!isNaN(parsedS) && parsedS >= 5) {
+                  parsedSVal = parsedS;
                   setParamValue(parsedS);
                 }
               }
@@ -1276,40 +1375,48 @@ export default function VernierIoTPage() {
               if (matchVel && matchTime) {
                 const speedVal = parseFloat(matchVel[1]);
                 const timeVal = parseFloat(matchTime[1]);
+                const usedS = parsedSVal !== null ? parsedSVal : paramValueRef.current;
                 const now = new Date();
                 const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
                 // Kiểm tra chống nhận trùng lượt (khi ESP32 gửi lại cùng 1 kết quả)
-                setLastPhotogateRun((prevRun) => {
-                  if (prevRun && Math.abs(prevRun.speed - speedVal) < 0.001 && Math.abs(prevRun.time - timeVal) < 0.0001) {
-                    return prevRun; // Đã nhận lượt này rồi -> KHÔNG thêm dòng mới vào bảng!
-                  }
+                const prevRun = lastPhotogateRunRef.current;
+                const isDuplicate =
+                  prevRun &&
+                  Math.abs(prevRun.speed - speedVal) < 0.001 &&
+                  Math.abs(prevRun.time - timeVal) < 0.0001;
 
-                  const curTheory = theoryValueRef.current;
+                if (!isDuplicate) {
+                  const newRun = {
+                    speed: speedVal,
+                    time: timeVal,
+                    timestamp: timeStr,
+                  };
+                  lastPhotogateRunRef.current = newRun;
+                  setLastPhotogateRun(newRun);
+
+                  const curTheory = EXPERIMENTS["ultrasonic"].calcTheory(usedS);
                   const err = curTheory > 0
                     ? parseFloat((Math.abs(speedVal - curTheory) / curTheory * 100).toFixed(2))
                     : 0;
 
-                  // Thêm ĐÚNG 1 ĐIỂM cho lượt chạy này vào bảng với thời gian t thực tế xe chạy
+                  // 1. Thêm ĐÚNG 1 ĐIỂM cho lượt chạy này vào đồ thị thời gian thực
                   setTelemetryList((prev) => [
                     ...prev.slice(-35),
                     {
-                      time: timeVal, // Thời gian thực tế xe di chuyển qua 2 cổng!
+                      time: timeVal,
                       measured: speedVal,
                       theory: parseFloat(curTheory.toFixed(2)),
                       errorPct: err,
                     },
                   ]);
 
-                  return {
-                    speed: speedVal,
-                    time: timeVal,
-                    timestamp: timeStr,
-                  };
-                });
+                  // 2. TỰ ĐỘNG LƯU KẾT QUẢ VÀO BẢNG SỐ LIỆU THÍ NGHIỆM!
+                  autoAppendRecord("ultrasonic", speedVal, usedS, timeStr);
+                }
 
                 setCurrentLiveVal(speedVal);
-                setStatusMsg(`🎉 Đã bắt trọn lượt chạy: v = ${speedVal} cm/s | t = ${timeVal} s! Bấm "Lưu Lượt Chạy" để ghi vào bảng.`);
+                setStatusMsg(`🎉 Đã bắt trọn lượt chạy: v = ${speedVal} cm/s | t = ${timeVal} s — Đã TỰ ĐỘNG lưu vào Bảng Số Liệu!`);
                 continue; // QUAN TRỌNG: Đã chốt lượt, KHÔNG để rơi xuống đoạn t += 0.1 rolling bên dưới!
               }
             }
@@ -3421,7 +3528,7 @@ export default function VernierIoTPage() {
                           Chưa có lần đo nào được ghi nhận vào bảng
                         </div>
                         <p className="text-[11px] text-slate-400 max-w-md font-sans">
-                          Cách làm: Chỉnh biến số thí nghiệm hoặc để cảm biến đo ổn định → Bấm <strong>"Tạm Dừng"</strong> → Bấm <strong>"Lưu Điểm Đo Này"</strong> để chốt số liệu vào bảng.
+                          Hệ thống sẽ <strong>TỰ ĐỘNG lưu kết quả</strong> vào bảng ngay khi xe đi qua 2 cổng quang (hoặc khi bấm Khóa lực / Tạm dừng trên hộp ESP32). Bạn cũng có thể bấm <strong>&quot;Lưu Điểm Đo Này&quot;</strong> thủ công bất kỳ lúc nào.
                         </p>
                       </div>
                     </td>
