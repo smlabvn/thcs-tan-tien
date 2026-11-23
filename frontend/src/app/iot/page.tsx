@@ -707,6 +707,7 @@ export default function VernierIoTPage() {
   const [connectionType, setConnectionType] = useState<"none" | "serial" | "bluetooth" | "simulator">("none");
   const [connectionStatus, setConnectionStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
   const [statusMsg, setStatusMsg] = useState<string>("Chế độ 1: Cảm biến phần cứng thật. Hãy cắm cáp USB và bấm 'Cắm USB Serial' để đọc dữ liệu ESP32.");
+  const [lastRawLine, setLastRawLine] = useState<string>("");
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [showCodeModal, setShowCodeModal] = useState<boolean>(false);
 
@@ -858,6 +859,7 @@ export default function VernierIoTPage() {
     setCurrentLiveVal(0);
     setPeakForce(0);
     setLastPhotogateRun(null);
+    lastPhotogateRunRef.current = null;
 
     if (expMode === "simulator") {
       setIsRecording(true);
@@ -865,10 +867,12 @@ export default function VernierIoTPage() {
       setConnectionType("simulator");
       setConnectionStatus("connected");
       setStatusMsg(`Đang chạy mô phỏng bài: ${exp.title} (Digital Twin)...`);
-    } else if (connectionStatus === "connected") {
+    } else if (serialPortRef.current || keepReadingRef.current || connectionStatus === "connected") {
       setIsRecording(true);
       isRecordingRef.current = true;
-      setStatusMsg(`Đang duy trì kết nối USB Serial liên tục! Đã chuyển sang bài: ${exp.title}. Sẵn sàng nhận số liệu...`);
+      setConnectionType("serial");
+      setConnectionStatus("connected");
+      setStatusMsg(`✓ Đang kết nối USB Serial! Đã chuyển sang bài: ${exp.title}. Đang nhận số liệu trực tiếp...`);
     } else {
       setIsRecording(false);
       isRecordingRef.current = false;
@@ -1232,6 +1236,7 @@ export default function VernierIoTPage() {
           for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed) continue;
+            setLastRawLine(trimmed);
 
             // Tự động nhận diện và chuyển bài thí nghiệm tương ứng với cảm biến trên bo mạch
             if (
@@ -1952,9 +1957,16 @@ export default function VernierIoTPage() {
                   </button>
                 </>
               ) : (
-                <div className="flex items-center gap-1.5 text-sky-700 dark:text-sky-400">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
-                  <span>{statusMsg}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-sky-700 dark:text-sky-400">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+                    <span>{statusMsg}</span>
+                  </div>
+                  {lastRawLine && connectionType === "serial" && (
+                    <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-mono text-slate-600 dark:text-slate-300 max-w-xs truncate" title={lastRawLine}>
+                      📥 ESP32: {lastRawLine}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
