@@ -727,6 +727,40 @@ export default function VernierIoTPage() {
   const [statusMsg, setStatusMsg] = useState<string>("Chế độ 1: Cảm biến phần cứng thật. Hãy cắm cáp USB và bấm 'Cắm USB Serial' để đọc dữ liệu ESP32.");
   const [lastRawLine, setLastRawLine] = useState<string>("");
   const [espBoxMode, setEspBoxMode] = useState<ExperimentType | "menu" | null>(null);
+  const [portChipInfo, setPortChipInfo] = useState<{ isUsbChip: boolean; label: string; vid?: number; pid?: number } | null>(null);
+  const [showNewPcDriverGuide, setShowNewPcDriverGuide] = useState<boolean>(false);
+
+  const getPortChipInfo = (p: any): { isUsbChip: boolean; label: string; vid?: number; pid?: number } => {
+    try {
+      const info = typeof p?.getInfo === "function" ? p.getInfo() : {};
+      const vid = info?.usbVendorId;
+      const pid = info?.usbProductId;
+      if (vid === 0x10c4) {
+        return { isUsbChip: true, label: "Chip ESP32 Silicon Labs CP210x (USB thật)", vid, pid };
+      }
+      if (vid === 0x1a86) {
+        return { isUsbChip: true, label: "Chip ESP32 WCH CH340/CH343 (USB thật)", vid, pid };
+      }
+      if (vid === 0x303a) {
+        return { isUsbChip: true, label: "Chip Espressif ESP32 Native USB", vid, pid };
+      }
+      if (vid === 0x0403) {
+        return { isUsbChip: true, label: "Chip USB-UART FTDI", vid, pid };
+      }
+      if (typeof vid === "number" && vid > 0) {
+        return { isUsbChip: true, label: `Cổng USB Serial (VID: 0x${vid.toString(16).toUpperCase()})`, vid, pid };
+      }
+      return {
+        isUsbChip: false,
+        label: "Cổng COM mặc định của máy tính (VD: COM1 - Không phải USB của hộp ESP32)",
+      };
+    } catch {
+      return {
+        isUsbChip: false,
+        label: "Cổng COM chưa xác định",
+      };
+    }
+  };
   const [autoSaveEnabled, setAutoSaveEnabled] = useState<boolean>(true);
   const autoSaveEnabledRef = useRef<boolean>(true);
   useEffect(() => {
@@ -1551,46 +1585,76 @@ export default function VernierIoTPage() {
     // Luôn gắn callback mới nhất
     mgr.onLine = (line: string) => processIncomingSerialLineRef.current(line);
 
-    // TRƯỜNG HỢP 1: Cổng đã mở và vòng lặp đọc đang chạy sẵn trong trình duyệt!
-    if (mgr.port && mgr.isLoopRunning) {
-      serialPortRef.current = mgr.port;
-      serialReaderRef.current = mgr.reader;
-      keepReadingRef.current = true;
-      setExpMode("hardware");
-      setConnectionType("serial");
-      setConnectionStatus("connected");
-      setIsRecording(true);
-      isRecordingRef.current = true;
-      setStatusMsg(`✓ Đang duy trì kết nối trực tiếp USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu từ ESP32...`);
-      return;
+    // TRƯỜNG HỢP 1: Khi tự động kết nối (promptUser === false), nếu cổng USB thật đã mở và vòng lặp đang chạy sẵn thì tái sử dụng
+    if (!promptUser && mgr.port && mgr.isLoopRunning) {
+      const chip = getPortChipInfo(mgr.port);
+      if (chip.isUsbChip) {
+        serialPortRef.current = mgr.port;
+        serialReaderRef.current = mgr.reader;
+        keepReadingRef.current = true;
+        setPortChipInfo(chip);
+        setExpMode("hardware");
+        setConnectionType("serial");
+        setConnectionStatus("connected");
+        setIsRecording(true);
+        isRecordingRef.current = true;
+        setStatusMsg(`✓ Đang duy trì kết nối ${chip.label} (${exp.baudRate} bps)! Đang nhận dữ liệu từ ESP32...`);
+        return;
+      }
     }
 
     try {
-      if (promptUser) {
-        setConnectionStatus("connecting");
-        setStatusMsg("Đang kết nối cổng COM/USB...");
-      }
-
       // @ts-ignore
-      let port = mgr.port || serialPortRef.current;
+      let port: any = null;
 
-      // Kiểm tra các cổng đã được cấp quyền trước đó qua navigator.serial.getPorts()
-      if (!port) {
+      if (promptUser) {
+        // Khi người dùng CHỦ ĐỘNG bấm nút Kết nối / Chọn lại cổng COM:
+        // LUÔN mở hộp thoại chọn cổng của Chrome ngay lập tức (tránh bị kẹt ở COM1 cũ trên máy tính mới!)
+        setConnectionStatus("connecting");
+        setStatusMsg("Đang mở bảng chọn cổng COM/USB trên trình duyệt...");
+        // @ts-ignore
+        port = await navigator.serial.requestPort();
+
+        // Nếu trước đó đang mở một cổng khác, đóng cổng cũ sạch sẽ trước khi mở cổng mới
+        if (mgr.port && mgr.port !== port) {
+          mgr.keepReading = false;
+          mgr.isLoopRunning = false;
+          if (mgr.reader) {
+            try {
+              await mgr.reader.cancel();
+              mgr.reader.releaseLock();
+            } catch (e) {}
+            mgr.reader = null;
+          }
+          try {
+            await mgr.port.close();
+          } catch (e) {}
+          mgr.port = null;
+        }
+      } else {
+        // Khi tự động kết nối ngầm lúc mới tải trang (promptUser === false):
+        // Chỉ tự động kết nối với cổng USB Serial THẬT (có usbVendorId như CP210x/CH340), TUYỆT ĐỐI KHÔNG tự vào COM1 của mainboard!
         try {
           // @ts-ignore
           const authorizedPorts = await navigator.serial.getPorts();
           if (authorizedPorts && authorizedPorts.length > 0) {
-            // Ưu tiên cổng đang mở sẵn hoặc cổng đầu tiên
-            port = authorizedPorts.find((p: any) => p.readable !== null) || authorizedPorts[0];
+            for (const p of authorizedPorts) {
+              const chip = getPortChipInfo(p);
+              if (chip.isUsbChip) {
+                if (!port || p.readable !== null) {
+                  port = p;
+                }
+              } else {
+                // Tự động xóa quyền nhớ cổng COM1 mặc định để không bị kết nối nhầm
+                try {
+                  if (typeof p.forget === "function") await p.forget();
+                } catch (e) {}
+              }
+            }
           }
         } catch (e) {}
-      }
 
-      // Nếu người dùng chủ động bấm nút và vẫn chưa có cổng nào (hoặc muốn chọn lại)
-      if (!port) {
-        if (!promptUser) return; // Auto-connect trên mount dừng lại nhẹ nhàng nếu chưa từng cấp quyền
-        // @ts-ignore
-        port = await navigator.serial.requestPort();
+        if (!port) return;
       }
 
       // Mở cổng nếu chưa mở (port.readable === null nghĩa là chưa mở)
@@ -1604,28 +1668,12 @@ export default function VernierIoTPage() {
           ) {
             console.warn("SerialPort already open, reusing.");
           } else {
-            // Nếu cổng cũ không mở được (VD đã rút cáp), và người dùng đang bấm nút -> mở hộp thoại chọn cổng mới
-            if (promptUser) {
-              // @ts-ignore
-              port = await navigator.serial.requestPort();
-              try {
-                await port.open({ baudRate: exp.baudRate });
-              } catch (err2: any) {
-                if (
-                  err2.name !== "InvalidStateError" &&
-                  !(err2.message && err2.message.toLowerCase().includes("already open"))
-                ) {
-                  throw err2;
-                }
-              }
-            } else {
-              return;
-            }
+            throw openErr;
           }
         }
       }
 
-      // Nếu port.readable đang bị khóa bởi một reader mồ côi từ phiên cũ, hủy reader hoặc forget port
+      // Nếu port.readable đang bị khóa bởi một reader cũ, giải phóng reader để gắn vòng lặp đọc mới
       if (port.readable && port.readable.locked) {
         if (mgr.reader) {
           try {
@@ -1637,6 +1685,18 @@ export default function VernierIoTPage() {
       }
 
       if (port.readable && port.readable.locked) {
+        // Nếu cổng đã có vòng lặp đọc chạy sẵn và đúng là cùng port
+        if (mgr.port === port && mgr.isLoopRunning) {
+          const chip = getPortChipInfo(port);
+          setPortChipInfo(chip);
+          setExpMode("hardware");
+          setConnectionType("serial");
+          setConnectionStatus("connected");
+          setIsRecording(true);
+          isRecordingRef.current = true;
+          setStatusMsg(`✓ Đã kết nối ${chip.label} (${exp.baudRate} bps)!`);
+          return;
+        }
         try {
           if (typeof port.forget === "function") {
             await port.forget();
@@ -1645,9 +1705,13 @@ export default function VernierIoTPage() {
         mgr.port = null;
         serialPortRef.current = null;
         if (!promptUser) return;
-        // @ts-ignore
-        port = await navigator.serial.requestPort();
-        await port.open({ baudRate: exp.baudRate });
+        throw new Error("Cổng COM đang bị phần mềm khác (như Arduino IDE) chiếm giữ. Hãy đóng phần mềm đó rồi thử lại.");
+      }
+
+      const chipInfo = getPortChipInfo(port);
+      setPortChipInfo(chipInfo);
+      if (!chipInfo.isUsbChip) {
+        setShowNewPcDriverGuide(true);
       }
 
       mgr.port = port;
@@ -1660,7 +1724,11 @@ export default function VernierIoTPage() {
       setConnectionStatus("connected");
       setIsRecording(true);
       isRecordingRef.current = true;
-      setStatusMsg(`✓ Đã kết nối trực tiếp cổng USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu từ ESP32...`);
+      setStatusMsg(
+        chipInfo.isUsbChip
+          ? `✓ Đã kết nối ${chipInfo.label} (${exp.baudRate} bps)! Đang nhận dữ liệu từ hộp ESP32...`
+          : `⚠️ Đã mở ${chipInfo.label}. Nếu không thấy dữ liệu, máy tính mới cần cài Driver CP210x/CH340 và chọn đúng cổng USB ESP32!`
+      );
 
       // Tự động gửi lệnh đồng bộ bài thí nghiệm hiện tại xuống ESP32 (sau khi ESP32 hoàn tất khởi động)
       setTimeout(() => {
@@ -1736,47 +1804,9 @@ export default function VernierIoTPage() {
     await connectSerialInternal(true);
   };
 
-  // Reset Serial Port Cleanly
+  // Reset Serial Port Cleanly & Open Chrome Port Picker Immediately (giữ nguyên User Gesture)
   const handleResetSerialPort = async () => {
-    const mgr = getGlobalSerialMgr();
-    if (mgr) {
-      mgr.keepReading = false;
-      mgr.isLoopRunning = false;
-      if (mgr.reader) {
-        try {
-          await mgr.reader.cancel();
-          mgr.reader.releaseLock();
-        } catch (e) {}
-        mgr.reader = null;
-      }
-      if (mgr.port) {
-        try {
-          await mgr.port.close();
-        } catch (e) {}
-        mgr.port = null;
-      }
-    }
-    keepReadingRef.current = false;
-    isRecordingRef.current = false;
-    if (serialReaderRef.current) {
-      try {
-        await serialReaderRef.current.cancel();
-        serialReaderRef.current.releaseLock();
-      } catch (e) {}
-      serialReaderRef.current = null;
-    }
-    if (serialPortRef.current) {
-      try {
-        await serialPortRef.current.close();
-      } catch (e) {}
-      serialPortRef.current = null;
-    }
-    setConnectionStatus("disconnected");
-    setConnectionType("none");
-    setStatusMsg("Đã đặt lại cổng USB Serial! Đang mở bảng chọn cổng kết nối lại...");
-    setTimeout(() => {
-      connectSerialInternal(true);
-    }, 150);
+    await connectSerialInternal(true);
   };
 
   // Web Bluetooth API handler
@@ -2212,6 +2242,118 @@ export default function VernierIoTPage() {
                 )}
               </div>
             )}
+
+          {/* Cảnh báo & Hướng dẫn cài Driver USB cho MÁY TÍNH MỚI (hoặc khi người dùng chọn nhầm cổng COM1 mặc định) */}
+          {expMode === "hardware" && (
+            <>
+              {portChipInfo && !portChipInfo.isUsbChip && (
+                <div className="w-full rounded-2xl bg-rose-50 dark:bg-rose-950/60 border-2 border-rose-400 dark:border-rose-700 p-4 flex flex-col gap-3 text-xs shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5 text-rose-950 dark:text-rose-200">
+                      <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-extrabold text-sm">
+                          ⚠️ Bạn vừa chọn Cổng COM mặc định của máy tính (VD: COM1) — Không phải cáp USB của hộp ESP32!
+                        </div>
+                        <div className="text-[11px] text-rose-800 dark:text-rose-300 mt-1 leading-relaxed">
+                          Trên <strong>máy tính mới</strong>, nếu trong bảng chọn cổng chưa hiện tên <strong>CP210x USB to UART Bridge</strong> hoặc <strong>USB-SERIAL CH340</strong> (mà chỉ hiện <code>COM1</code>), nghĩa là máy tính mới chưa cài Driver USB cho mạch ESP32.
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleConnectSerial}
+                      className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition-all shrink-0 cursor-pointer"
+                    >
+                      🔌 Mở Bảng Chọn Lại Cổng COM
+                    </button>
+                  </div>
+                  <div className="pt-2 border-t border-rose-200 dark:border-rose-800/60 flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-rose-900 dark:text-rose-200">Bước 1 (Cài Driver cho máy tính mới):</span>
+                    <a
+                      href="https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 font-bold hover:bg-rose-100 transition-all"
+                    >
+                      📥 Tải Driver CP210x (Silicon Labs - Chuẩn hộp ESP32)
+                    </a>
+                    <a
+                      href="https://www.wch-ic.com/downloads/file/65.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 transition-all"
+                    >
+                      📥 Tải Driver CH340 (Dự phòng)
+                    </a>
+                    <span className="text-[11px] text-rose-700 dark:text-rose-300">
+                      (Tải về → Giải nén → Nhấp chuột phải vào <code>silabser.inf</code> chọn <strong>Install</strong> → Cắm lại USB và bấm <strong>Mở Bảng Chọn Lại Cổng COM</strong>)
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {(!portChipInfo || (portChipInfo.isUsbChip && !lastRawLine)) && (
+                <div className="w-full rounded-2xl bg-sky-50/90 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 text-sky-900 dark:text-sky-200">
+                    <Usb className="w-4 h-4 text-sky-600 shrink-0" />
+                    <span>
+                      <strong>Đang dùng trên máy tính mới?</strong> Hãy cắm cáp USB từ hộp đen vào máy tính và bấm chọn cổng <strong>CP210x / USB Serial</strong> (không chọn COM1).
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPcDriverGuide((v) => !v)}
+                      className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300 font-bold text-[11px] hover:bg-sky-100 transition-all cursor-pointer"
+                    >
+                      {showNewPcDriverGuide ? "Ẩn hướng dẫn máy mới" : "💻 Tải Driver USB cho máy mới"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConnectSerial}
+                      className="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer"
+                    >
+                      🔌 Chọn Cổng COM ESP32
+                    </button>
+                  </div>
+                  {showNewPcDriverGuide && (
+                    <div className="w-full mt-2 pt-2.5 border-t border-sky-200 dark:border-sky-800/70 text-[11px] text-slate-700 dark:text-slate-300 space-y-1.5">
+                      <div className="font-bold text-sky-900 dark:text-sky-200">
+                        Hướng dẫn 3 bước khi cắm Hộp thí nghiệm vào một Máy Tính Mới lần đầu:
+                      </div>
+                      <div>
+                        <strong>1. Cài Driver nhận chip USB ESP32:</strong> Nếu bảng chọn cổng COM của Chrome chỉ hiện <code>COM1</code> mà không hiện <code>CP210x</code>, hãy tải{" "}
+                        <a
+                          href="https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline font-bold text-sky-700 dark:text-sky-300"
+                        >
+                          Driver CP210x (Silicon Labs) tại đây
+                        </a>{" "}
+                        (giải nén → chuột phải vào file <code>silabser.inf</code> → chọn <strong>Install</strong>), hoặc{" "}
+                        <a
+                          href="https://www.wch-ic.com/downloads/file/65.html"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline font-bold text-sky-700 dark:text-sky-300"
+                        >
+                          Driver CH340 tại đây
+                        </a>.
+                      </div>
+                      <div>
+                        <strong>2. Chọn đúng cổng COM:</strong> Bấm nút <strong>🔌 Chọn Cổng COM ESP32</strong> → Chọn dòng có chữ <strong>CP210x USB to UART Bridge (COM...)</strong> → Bấm <strong>Connect</strong>.
+                      </div>
+                      <div>
+                        <strong>3. Vào bài trên hộp đen:</strong> Nhìn màn hình OLED trên hộp đen → Bấm <strong>Nút xanh phải (Nút 2)</strong> chọn bài → Bấm <strong>Nút xanh trái (Nút 1)</strong> để vào bài đo!
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
 
           {/* Live Peripheral Telemetry Status Banner */}
           <div className="w-full rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 flex flex-wrap items-center justify-between gap-4 shadow-xs text-xs">
