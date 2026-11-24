@@ -733,6 +733,8 @@ export default function VernierIoTPage() {
   const [espBoxMode, setEspBoxMode] = useState<ExperimentType | "menu" | null>(null);
   const [portChipInfo, setPortChipInfo] = useState<{ isUsbChip: boolean; label: string; vid?: number; pid?: number } | null>(null);
   const [showNewPcDriverGuide, setShowNewPcDriverGuide] = useState<boolean>(false);
+  const [oledManualSpeed, setOledManualSpeed] = useState<string>("51.6");
+  const [oledManualTime, setOledManualTime] = useState<string>("0.581");
 
   const getPortChipInfo = (p: any): { isUsbChip: boolean; label: string; vid?: number; pid?: number } => {
     try {
@@ -740,23 +742,28 @@ export default function VernierIoTPage() {
       const vid = info?.usbVendorId;
       const pid = info?.usbProductId;
       if (vid === 0x10c4) {
-        return { isUsbChip: true, label: "Chip ESP32 Silicon Labs CP210x (USB thật)", vid, pid };
+        return { isUsbChip: true, label: "Chip ESP32 Silicon Labs CP210x (VID: 0x10C4 - Chuẩn hộp đen)", vid, pid };
       }
       if (vid === 0x1a86) {
-        return { isUsbChip: true, label: "Chip ESP32 WCH CH340/CH343 (USB thật)", vid, pid };
+        return { isUsbChip: true, label: "Chip ESP32 WCH CH340/CH343 (VID: 0x1A86)", vid, pid };
       }
       if (vid === 0x303a) {
-        return { isUsbChip: true, label: "Chip Espressif ESP32 Native USB", vid, pid };
+        return { isUsbChip: true, label: "Chip Espressif ESP32 Native USB (VID: 0x303A)", vid, pid };
       }
       if (vid === 0x0403) {
-        return { isUsbChip: true, label: "Chip USB-UART FTDI", vid, pid };
+        return { isUsbChip: true, label: "Chip USB-UART FTDI (VID: 0x0403)", vid, pid };
       }
       if (typeof vid === "number" && vid > 0) {
-        return { isUsbChip: true, label: `Cổng USB Serial (VID: 0x${vid.toString(16).toUpperCase()})`, vid, pid };
+        return {
+          isUsbChip: false,
+          label: `Thiết bị USB khác của máy tính (VID: 0x${vid.toString(16).toUpperCase()}, PID: 0x${(pid || 0).toString(16).toUpperCase()} — KHÔNG PHẢI hộp ESP32 CP210x!)`,
+          vid,
+          pid,
+        };
       }
       return {
         isUsbChip: false,
-        label: "Cổng COM mặc định của máy tính (VD: COM1 - Không phải USB của hộp ESP32)",
+        label: "Cổng COM mặc định của máy tính (Không có VID USB — KHÔNG PHẢI hộp ESP32 CP210x!)",
       };
     } catch {
       return {
@@ -2310,10 +2317,14 @@ export default function VernierIoTPage() {
                       <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                       <div>
                         <div className="font-extrabold text-sm">
-                          ⚠️ Bạn vừa chọn Cổng COM mặc định của máy tính (VD: COM1) — Không phải cáp USB của hộp ESP32!
+                          ⚠️ Cổng bạn vừa chọn ({portChipInfo.label}) KHÔNG PHẢI là cáp USB của Hộp thí nghiệm đen!
                         </div>
                         <div className="text-[11px] text-rose-800 dark:text-rose-300 mt-1 leading-relaxed">
-                          Trên <strong>máy tính mới</strong>, nếu trong bảng chọn cổng chưa hiện tên <strong>CP210x USB to UART Bridge</strong> hoặc <strong>USB-SERIAL CH340</strong> (mà chỉ hiện <code>COM1</code>), nghĩa là máy tính mới chưa cài Driver USB cho mạch ESP32.
+                          Hộp thí nghiệm đen dùng chip <strong>Silicon Labs CP210x (VID: 0x10C4)</strong>. Cổng <code>USB Composite Device (COM9)</code> bạn vừa chọn là một thiết bị khác của máy tính mới (như Webcam/Màn hình tương tác). Vì sao cổng <strong>CP210x</strong> chưa xuất hiện trong bảng chọn của Chrome?
+                          <br />
+                          👉 <strong>Nguyên nhân 1:</strong> Bạn đã tải file <code>CP210x_Universal_Windows_Driver.zip</code> về máy nhưng <strong>chưa giải nén và bấm Install</strong>! Hãy nhấn <strong>Ctrl + J</strong> trên Chrome → Mở thư mục chứa file <code>CP210x_Universal_Windows_Driver.zip</code> → <strong>Giải nén (Extract All)</strong> → Nhấp chuột phải vào file <strong><code>silabser.inf</code></strong> chọn <strong>Install (Cài đặt)</strong>.
+                          <br />
+                          👉 <strong>Nguyên nhân 2:</strong> Nếu đã cài Driver mà vẫn chưa hiện cổng <code>CP210x</code>, hãy đổi sợi cáp USB khác (cáp có truyền dữ liệu Data, không dùng cáp chỉ sạc) và cắm sang cổng USB khác trên máy tính.
                         </div>
                       </div>
                     </div>
@@ -2326,7 +2337,7 @@ export default function VernierIoTPage() {
                     </button>
                   </div>
                   <div className="pt-2 border-t border-rose-200 dark:border-rose-800/60 flex flex-wrap items-center gap-2">
-                    <span className="font-bold text-rose-900 dark:text-rose-200">Bước 1 (Cài Driver cho máy tính mới):</span>
+                    <span className="font-bold text-rose-900 dark:text-rose-200">Tải lại nếu cần:</span>
                     <a
                       href="https://www.silabs.com/documents/public/software/CP210x_Universal_Windows_Driver.zip"
                       target="_blank"
@@ -2343,9 +2354,6 @@ export default function VernierIoTPage() {
                     >
                       📥 Tải Driver CH340 (Dự phòng)
                     </a>
-                    <span className="text-[11px] text-rose-700 dark:text-rose-300">
-                      (Tải về → Giải nén → Nhấp chuột phải vào <code>silabser.inf</code> chọn <strong>Install</strong> → Cắm lại USB và bấm <strong>Mở Bảng Chọn Lại Cổng COM</strong>)
-                    </span>
                   </div>
                 </div>
               )}
@@ -3301,67 +3309,145 @@ export default function VernierIoTPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="flex flex-col gap-0.5 text-sky-800 dark:text-sky-300">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping shrink-0" />
-                        <span>
-                          <strong>2 Cổng quang đang sẵn sàng:</strong> Nếu màn hình OLED trên hộp đen đang hiện <code>DA QUA 2 CONG!</code>, hãy bấm <strong>Nút xanh trái (N1)</strong> trên hộp (hoặc nút <strong>Mở Khóa Hộp</strong> bên phải) để về <code>SAN SANG: THA XE</code> rồi thả xe qua Cổng A → Cổng B!
-                        </span>
-                      </div>
-                      {lastRawLine && (
-                        <div className="text-[11px] font-mono text-emerald-700 dark:text-emerald-300 pl-4">
-                          📟 Phản hồi trực tiếp từ hộp ESP32: &ldquo;{lastRawLine}&rdquo;
+                  <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 flex flex-col gap-2.5 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-col gap-0.5 text-sky-800 dark:text-sky-300">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping shrink-0" />
+                          <span>
+                            <strong>2 Cổng quang đang sẵn sàng:</strong> Nếu màn hình OLED trên hộp đen đang hiện <code>DA QUA 2 CONG!</code>, hãy bấm <strong>Nút xanh trái (N1)</strong> trên hộp (hoặc nút <strong>Mở Khóa Hộp</strong>) để về <code>SAN SANG: THA XE</code> rồi thả xe qua Cổng A → Cổng B!
+                          </span>
                         </div>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {connectionStatus === "connected" && (
+                        {lastRawLine && (
+                          <div className="text-[11px] font-mono text-emerald-700 dark:text-emerald-300 pl-4">
+                            📟 Phản hồi trực tiếp từ hộp ESP32: &ldquo;{lastRawLine}&rdquo;
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {connectionStatus === "connected" && (
+                          <button
+                            onClick={() => {
+                              sendSerialCommand("RESET");
+                              sendSerialCommand(`DIST:${paramValue}`);
+                              setStatusMsg("Đã gửi lệnh RESET mở khóa lượt đo mới xuống hộp ESP32!");
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer"
+                            title="Mở khóa cổng quang trên hộp ESP32 (tương đương bấm Nút 1: Lượt mới)"
+                          >
+                            🔓 Mở Khóa Hộp (Lượt Mới)
+                          </button>
+                        )}
                         <button
                           onClick={() => {
-                            sendSerialCommand("RESET");
-                            sendSerialCommand(`DIST:${paramValue}`);
-                            setStatusMsg("Đã gửi lệnh RESET mở khóa lượt đo mới xuống hộp ESP32!");
+                            const simSpeed = parseFloat((35.0 + (Math.random() - 0.5) * 4.0).toFixed(2));
+                            const simTime = parseFloat((paramValue / simSpeed).toFixed(4));
+                            const now = new Date();
+                            const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                            const curTheory = theoryValueRef.current || 35.0;
+                            const err = curTheory !== 0 ? parseFloat(((Math.abs(simSpeed - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
+                            setLastPhotogateRun({
+                              speed: simSpeed,
+                              time: simTime,
+                              timestamp: timeStr,
+                            });
+                            setCurrentLiveVal(simSpeed);
+                            setTelemetryList((prev) => {
+                              const nextTime = prev.length > 0 ? parseFloat((prev[prev.length - 1].time + simTime).toFixed(2)) : simTime;
+                              return [
+                                ...prev.slice(-39),
+                                {
+                                  time: nextTime,
+                                  measured: simSpeed,
+                                  theory: parseFloat(curTheory.toFixed(2)),
+                                  errorPct: err,
+                                },
+                              ];
+                            });
+                            autoAppendRecord("ultrasonic", simSpeed, paramValue, timeStr);
+                            setStatusMsg(`✅ Đã ghi nhận lượt chạy xe: v = ${simSpeed} cm/s (t = ${simTime} s) và tự động lưu vào Bảng Ghi Chép!`);
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer"
-                          title="Mở khóa cổng quang trên hộp ESP32 (tương đương bấm Nút 1: Lượt mới)"
+                          className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer"
+                          title="Chạy thử nghiệm lượt thả xe lăn và lưu kết quả"
                         >
-                          🔓 Mở Khóa Hộp (Lượt Mới)
+                          🏎️ Thả Thử Xe Lăn
                         </button>
-                      )}
+                      </div>
+                    </div>
+
+                    {/* Thanh đồng bộ nhanh kết quả từ màn hình OLED hộp đen (dùng ngay khi máy mới chưa cài xong Driver CP210x) */}
+                    <div className="pt-2 border-t border-sky-200/80 dark:border-sky-800/70 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300">
+                        <span className="font-bold text-sky-900 dark:text-sky-200">📟 Đồng bộ số đo hiển thị trên OLED hộp đen:</span>
+                        <label className="flex items-center gap-1">
+                          <span>v =</span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={oledManualSpeed}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setOledManualSpeed(val);
+                              const numV = parseFloat(val);
+                              if (!isNaN(numV) && numV > 0) {
+                                setOledManualTime((paramValue / numV).toFixed(3));
+                              }
+                            }}
+                            className="w-16 px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-sky-300 dark:border-sky-700 font-mono font-bold text-sky-700 dark:text-sky-300 text-center"
+                          />
+                          <span>cm/s</span>
+                        </label>
+                        <label className="flex items-center gap-1">
+                          <span>t =</span>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={oledManualTime}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setOledManualTime(val);
+                              const numT = parseFloat(val);
+                              if (!isNaN(numT) && numT > 0) {
+                                setOledManualSpeed((paramValue / numT).toFixed(1));
+                              }
+                            }}
+                            className="w-16 px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-sky-300 dark:border-sky-700 font-mono font-bold text-sky-700 dark:text-sky-300 text-center"
+                          />
+                          <span>s</span>
+                        </label>
+                      </div>
                       <button
+                        type="button"
                         onClick={() => {
-                          const simSpeed = parseFloat((35.0 + (Math.random() - 0.5) * 4.0).toFixed(2));
-                          const simTime = parseFloat((paramValue / simSpeed).toFixed(4));
+                          const speedVal = parseFloat(oledManualSpeed);
+                          const timeVal = parseFloat(oledManualTime);
+                          if (isNaN(speedVal) || speedVal <= 0) return;
+                          const finalTime = !isNaN(timeVal) && timeVal > 0 ? timeVal : parseFloat((paramValue / speedVal).toFixed(3));
                           const now = new Date();
                           const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
                           const curTheory = theoryValueRef.current || 35.0;
-                          const err = curTheory !== 0 ? parseFloat(((Math.abs(simSpeed - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
+                          const err = curTheory !== 0 ? parseFloat(((Math.abs(speedVal - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
                           setLastPhotogateRun({
-                            speed: simSpeed,
-                            time: simTime,
+                            speed: speedVal,
+                            time: finalTime,
                             timestamp: timeStr,
                           });
-                          setCurrentLiveVal(simSpeed);
-                          setTelemetryList((prev) => {
-                            const nextTime = prev.length > 0 ? parseFloat((prev[prev.length - 1].time + simTime).toFixed(2)) : simTime;
-                            return [
-                              ...prev.slice(-39),
-                              {
-                                time: nextTime,
-                                measured: simSpeed,
-                                theory: parseFloat(curTheory.toFixed(2)),
-                                errorPct: err,
-                              },
-                            ];
-                          });
-                          autoAppendRecord("ultrasonic", simSpeed, paramValue, timeStr);
-                          setStatusMsg(`✅ Đã ghi nhận lượt chạy xe: v = ${simSpeed} cm/s (t = ${simTime} s) và tự động lưu vào Bảng Ghi Chép!`);
+                          setCurrentLiveVal(speedVal);
+                          setTelemetryList((prev) => [
+                            ...prev.slice(-39),
+                            {
+                              time: finalTime,
+                              measured: speedVal,
+                              theory: parseFloat(curTheory.toFixed(2)),
+                              errorPct: err,
+                            },
+                          ]);
+                          autoAppendRecord("ultrasonic", speedVal, paramValue, timeStr);
+                          setStatusMsg(`✅ Đã đồng bộ số đo OLED hộp đen (v = ${speedVal} cm/s, t = ${finalTime} s) lên Đồ Thị và Bảng Ghi Chép!`);
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer"
-                        title="Chạy thử nghiệm lượt thả xe lăn và lưu kết quả"
+                        className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer"
                       >
-                        🏎️ Thả Thử Xe Lăn
+                        ⚡ Ghi Nhận Số Đo OLED Lên Đồ Thị & Bảng
                       </button>
                     </div>
                   </div>
