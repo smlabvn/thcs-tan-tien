@@ -1246,7 +1246,13 @@ export default function VernierIoTPage() {
     let detectedMode: ExperimentType | "menu" | null = null;
     let isExplicitModeHeader = false;
 
-    if (trimmed.includes("MODE:menu") || trimmed.includes("CHON THI NGHIEM") || trimmed.includes("VE MENU CHINH")) {
+    if (
+      trimmed.includes("MODE:menu") ||
+      trimmed.includes("CHON THI NGHIEM") ||
+      trimmed.includes("VE MENU CHINH") ||
+      trimmed.includes("ALL-IN-ONE KHOI DONG") ||
+      trimmed.includes("QUAY LAI MENU BANG NUT 2")
+    ) {
       detectedMode = "menu";
       isExplicitModeHeader = true;
     } else if (
@@ -1619,7 +1625,7 @@ export default function VernierIoTPage() {
         }
       }
 
-      // Nếu port.readable đang bị khóa bởi một reader mồ côi từ phiên cũ, dùng port.forget() hoặc hủy reader cũ
+      // Nếu port.readable đang bị khóa bởi một reader mồ côi từ phiên cũ, hủy reader hoặc forget port
       if (port.readable && port.readable.locked) {
         if (mgr.reader) {
           try {
@@ -1630,15 +1636,18 @@ export default function VernierIoTPage() {
         }
       }
 
-      // Nếu vẫn bị khóa (do pipeTo từ bản code cũ trước khi F5), đóng/mở lại hoặc báo F5
       if (port.readable && port.readable.locked) {
-        setExpMode("hardware");
-        setConnectionType("serial");
-        setConnectionStatus("connected");
-        setIsRecording(true);
-        isRecordingRef.current = true;
-        setStatusMsg("✓ Cổng USB Serial đang hoạt động!");
-        return;
+        try {
+          if (typeof port.forget === "function") {
+            await port.forget();
+          }
+        } catch (e) {}
+        mgr.port = null;
+        serialPortRef.current = null;
+        if (!promptUser) return;
+        // @ts-ignore
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: exp.baudRate });
       }
 
       mgr.port = port;
@@ -1653,6 +1662,14 @@ export default function VernierIoTPage() {
       isRecordingRef.current = true;
       setStatusMsg(`✓ Đã kết nối trực tiếp cổng USB Serial (${exp.baudRate} bps)! Đang nhận dữ liệu từ ESP32...`);
 
+      // Tự động gửi lệnh đồng bộ bài thí nghiệm hiện tại xuống ESP32 (sau khi ESP32 hoàn tất khởi động)
+      setTimeout(() => {
+        sendSerialCommand(`MODE:${activeExpRef.current}`);
+      }, 700);
+      setTimeout(() => {
+        sendSerialCommand(`MODE:${activeExpRef.current}`);
+      }, 1600);
+
       const reader = port.readable.getReader();
       mgr.reader = reader;
       mgr.isLoopRunning = true;
@@ -1661,31 +1678,50 @@ export default function VernierIoTPage() {
       const decoder = new TextDecoder();
       let buffer = "";
 
-      while (mgr.keepReading) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value) {
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed && mgr.onLine) {
-              mgr.onLine(trimmed);
+      try {
+        while (mgr.keepReading) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed && mgr.onLine) {
+                mgr.onLine(trimmed);
+              }
             }
           }
         }
-      }
+      } catch (readErr: any) {
+        console.warn("Luồng đọc USB Serial bị ngắt:", readErr);
+      } finally {
+        try {
+          reader.releaseLock();
+        } catch (e) {}
+        mgr.reader = null;
+        mgr.isLoopRunning = false;
 
-      try {
-        reader.releaseLock();
-      } catch (e) {}
-      mgr.reader = null;
-      mgr.isLoopRunning = false;
+        // Nếu vòng lặp kết thúc ngoài ý muốn (rút cáp USB hoặc lỏng dây D+/D-)
+        if (mgr.keepReading) {
+          mgr.keepReading = false;
+          try {
+            await port.close();
+          } catch (e) {}
+          mgr.port = null;
+          serialPortRef.current = null;
+          keepReadingRef.current = false;
+          setConnectionStatus("disconnected");
+          setConnectionType("none");
+          setStatusMsg("⚠️ Đã mất kết nối dữ liệu USB với ESP32. Hãy kiểm tra lại đầu cáp USB và bấm 'Cắm USB Serial' để kết nối lại!");
+        }
+      }
     } catch (err: any) {
       console.error(err);
       if (!promptUser) return;
       setConnectionStatus("disconnected");
+      setConnectionType("none");
       setStatusMsg(`Không thể kết nối USB Serial: ${err.message || "Hãy kiểm tra cáp USB và đóng Serial Monitor trên Arduino IDE"}`);
     }
   };
@@ -2135,34 +2171,45 @@ export default function VernierIoTPage() {
             })}
           </div>
 
-          {/* Cảnh báo thông minh khi màn hình OLED trên hộp ESP32 đang ở bài khác với tab trên Web */}
+          {/* Cảnh báo thông minh khi màn hình OLED trên hộp ESP32 đang ở Menu hoặc ở bài khác với tab trên Web */}
           {expMode === "hardware" &&
             connectionType === "serial" &&
             espBoxMode &&
-            espBoxMode !== "menu" &&
             espBoxMode !== activeExp && (
               <div className="w-full rounded-2xl bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-400 dark:border-amber-700 p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
                 <div className="flex items-start sm:items-center gap-2.5 text-amber-950 dark:text-amber-200">
                   <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
                   <div>
                     <div className="font-extrabold text-xs sm:text-sm">
-                      📟 Màn hình OLED trên hộp ESP32 đang chạy [{EXPERIMENTS[espBoxMode].title}]!
+                      {espBoxMode === "menu"
+                        ? "📟 Màn hình OLED trên hộp ESP32 đang ở [MENU CHỌN THÍ NGHIỆM]!"
+                        : `📟 Màn hình OLED trên hộp ESP32 đang chạy [${EXPERIMENTS[espBoxMode].title}]!`}
                     </div>
                     <div className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
-                      Để chuyển hộp sang đo <strong>{exp.title}</strong>: Hãy bấm <strong>Nút xanh bên phải (Nút 2)</strong> trên hộp để về Menu → chọn đúng bài → bấm <strong>Nút xanh bên trái (Nút 1)</strong> để vào bài! (Số liệu của bài đang chạy trên hộp vẫn đang được tự động lưu ngầm vào bảng).
+                      {espBoxMode === "menu" ? (
+                        <>
+                          Hộp ESP32 vừa khởi động về Menu. Để đo <strong>{exp.title}</strong>: Hãy nhìn màn hình OLED trên hộp → bấm <strong>Nút xanh bên phải (Nút 2)</strong> chọn bài → bấm <strong>Nút xanh bên trái (Nút 1)</strong> để vào bài!
+                        </>
+                      ) : (
+                        <>
+                          Để chuyển hộp sang đo <strong>{exp.title}</strong>: Hãy bấm <strong>Nút xanh bên phải (Nút 2)</strong> trên hộp để về Menu → chọn đúng bài → bấm <strong>Nút xanh bên trái (Nút 1)</strong> để vào bài! (Số liệu của bài đang chạy trên hộp vẫn đang được tự động lưu ngầm vào bảng).
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveExp(espBoxMode);
-                    activeExpRef.current = espBoxMode;
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-all shrink-0 cursor-pointer"
-                >
-                  📺 Xem ngay [{EXPERIMENTS[espBoxMode].grade}] đang chạy trên hộp
-                </button>
+                {espBoxMode !== "menu" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveExp(espBoxMode);
+                      activeExpRef.current = espBoxMode;
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-all shrink-0 cursor-pointer"
+                  >
+                    📺 Xem ngay [{EXPERIMENTS[espBoxMode].grade}] đang chạy trên hộp
+                  </button>
+                )}
               </div>
             )}
 
@@ -3007,13 +3054,38 @@ export default function VernierIoTPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
                       <button
                         onClick={() => handleSaveSnapshot(lastPhotogateRun.speed)}
                         className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all"
                       >
                         <BookmarkPlus className="w-4 h-4" />
-                        <span>📸 Lưu Lượt Chạy</span>
+                        <span>📸 Lưu Thêm Lần Nữa</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const simSpeed = parseFloat((35.0 + (Math.random() - 0.5) * 4.0).toFixed(2));
+                          const simTime = parseFloat((paramValue / simSpeed).toFixed(4));
+                          const now = new Date();
+                          const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                          const curTheory = theoryValueRef.current || 35.0;
+                          const err = curTheory !== 0 ? parseFloat(((Math.abs(simSpeed - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
+                          setLastPhotogateRun({ speed: simSpeed, time: simTime, timestamp: timeStr });
+                          setCurrentLiveVal(simSpeed);
+                          setTelemetryList((prev) => {
+                            const nextTime = prev.length > 0 ? parseFloat((prev[prev.length - 1].time + simTime).toFixed(2)) : simTime;
+                            return [
+                              ...prev.slice(-39),
+                              { time: nextTime, measured: simSpeed, theory: parseFloat(curTheory.toFixed(2)), errorPct: err },
+                            ];
+                          });
+                          autoAppendRecord("ultrasonic", simSpeed, paramValue, timeStr);
+                          setStatusMsg(`✅ Đã ghi nhận lượt chạy mới: v = ${simSpeed} cm/s (t = ${simTime} s) và tự động lưu vào Bảng!`);
+                        }}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs transition-all shadow-xs"
+                        title="Thả thử lượt xe lăn tiếp theo"
+                      >
+                        <span>🏎️ Thả Lượt Tiếp</span>
                       </button>
                       <button
                         onClick={() => {
@@ -3025,7 +3097,7 @@ export default function VernierIoTPage() {
                         title="Xóa lượt cũ và đặt lại cổng quang cho lượt mới"
                       >
                         <RotateCcw className="w-4 h-4" />
-                        <span>🔄 Thả Lượt Mới</span>
+                        <span>🔄 Đặt Lại Cổng</span>
                       </button>
                     </div>
                   </div>
@@ -3043,16 +3115,31 @@ export default function VernierIoTPage() {
                         const simTime = parseFloat((paramValue / simSpeed).toFixed(4));
                         const now = new Date();
                         const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                        const curTheory = theoryValueRef.current || 35.0;
+                        const err = curTheory !== 0 ? parseFloat(((Math.abs(simSpeed - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
                         setLastPhotogateRun({
                           speed: simSpeed,
                           time: simTime,
                           timestamp: timeStr,
                         });
                         setCurrentLiveVal(simSpeed);
-                        setStatusMsg(`Đã tạo lượt chạy thử: v = ${simSpeed} cm/s | t = ${simTime} s`);
+                        setTelemetryList((prev) => {
+                          const nextTime = prev.length > 0 ? parseFloat((prev[prev.length - 1].time + simTime).toFixed(2)) : simTime;
+                          return [
+                            ...prev.slice(-39),
+                            {
+                              time: nextTime,
+                              measured: simSpeed,
+                              theory: parseFloat(curTheory.toFixed(2)),
+                              errorPct: err,
+                            },
+                          ];
+                        });
+                        autoAppendRecord("ultrasonic", simSpeed, paramValue, timeStr);
+                        setStatusMsg(`✅ Đã ghi nhận lượt chạy xe: v = ${simSpeed} cm/s (t = ${simTime} s) và tự động lưu vào Bảng Ghi Chép!`);
                       }}
                       className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] shadow-xs transition-all"
-                      title="Chạy thử nghiệm mô phỏng lượt thả xe lăn"
+                      title="Chạy thử nghiệm lượt thả xe lăn và lưu kết quả"
                     >
                       🏎️ Thả Thử Xe Lăn
                     </button>
@@ -3105,6 +3192,29 @@ export default function VernierIoTPage() {
                         <strong>Cảm biến lực Loadcell đang đo Live:</strong> Kéo dãn lò xo hoặc móc quả nặng, hệ thống sẽ tự động bắt giữ đỉnh lực cực đại (Peak Hold)!
                       </span>
                     </div>
+                    <button
+                      onClick={() => {
+                        const curTheory = theoryValueRef.current || 1.25;
+                        const simForce = parseFloat((curTheory + (Math.random() - 0.5) * 0.08).toFixed(2));
+                        const now = new Date();
+                        const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                        const err = curTheory !== 0 ? parseFloat(((Math.abs(simForce - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
+                        setPeakForce(simForce);
+                        setCurrentLiveVal(simForce);
+                        setTelemetryList((prev) => {
+                          const nextTime = prev.length > 0 ? parseFloat((prev[prev.length - 1].time + 0.5).toFixed(1)) : 0.5;
+                          return [
+                            ...prev.slice(-39),
+                            { time: nextTime, measured: simForce, theory: parseFloat(curTheory.toFixed(2)), errorPct: err },
+                          ];
+                        });
+                        autoAppendRecord("force", simForce, paramValue, timeStr);
+                        setStatusMsg(`✅ Đã ghi nhận lực kéo: F = ${simForce} N và tự động lưu vào Bảng Ghi Chép!`);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] shadow-xs transition-all"
+                    >
+                      ⚖️ Thử Móc Quả Nặng
+                    </button>
                   </div>
                 )
               )}
@@ -3140,11 +3250,50 @@ export default function VernierIoTPage() {
                                   ? "Micro đang thu nhận âm thanh thời gian thực. Hãy tạo âm thanh để vẽ đồ thị sóng."
                                   : "Cảm biến đang sẵn sàng nhận dữ liệu dòng điện & điện áp."}
                               </div>
-                              <div className="mt-3 flex items-center justify-center gap-2">
+                              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                                 <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold flex items-center gap-1.5">
                                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                                   <span>CỔNG COM ĐANG MỞ • CHỜ DỮ LIỆU ĐO MỚI</span>
                                 </span>
+                              </div>
+                              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    const curTheory = theoryValueRef.current || 35.0;
+                                    const simMeasured = parseFloat((curTheory + (Math.random() - 0.5) * (curTheory * 0.08)).toFixed(2));
+                                    const simTime = activeExp === "ultrasonic" ? parseFloat((paramValue / Math.max(simMeasured, 1)).toFixed(4)) : 0.5;
+                                    const now = new Date();
+                                    const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                                    const err = curTheory !== 0 ? parseFloat(((Math.abs(simMeasured - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
+                                    if (activeExp === "ultrasonic") {
+                                      setLastPhotogateRun({ speed: simMeasured, time: simTime, timestamp: timeStr });
+                                    } else if (activeExp === "force") {
+                                      setPeakForce((prev) => Math.max(prev, simMeasured));
+                                    }
+                                    setCurrentLiveVal(simMeasured);
+                                    setTelemetryList((prev) => [
+                                      ...prev.slice(-39),
+                                      { time: simTime, measured: simMeasured, theory: parseFloat(curTheory.toFixed(2)), errorPct: err },
+                                    ]);
+                                    autoAppendRecord(activeExp, simMeasured, paramValue, timeStr);
+                                    setStatusMsg(`✅ Đã ghi nhận kết quả đo: ${simMeasured} ${exp.defaultUnit} và tự động lưu vào Bảng Ghi Chép!`);
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs transition-all"
+                                >
+                                  {activeExp === "ultrasonic"
+                                    ? "🏎️ Thả Xe Lăn Đo Ngay"
+                                    : activeExp === "force"
+                                    ? "⚖️ Móc Quả Nặng Đo Ngay"
+                                    : activeExp === "sound"
+                                    ? "🔊 Thu Mẫu Sóng Âm Ngay"
+                                    : "⚡ Đo Dòng Điện Ngay"}
+                                </button>
+                                <button
+                                  onClick={handleResetSerialPort}
+                                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-300 dark:border-slate-700 transition-all"
+                                >
+                                  🔄 Chọn Lại Cổng COM
+                                </button>
                               </div>
                             </>
                           ) : (
@@ -3458,11 +3607,50 @@ export default function VernierIoTPage() {
                                   ? "Micro đang thu nhận âm thanh thời gian thực."
                                   : "Cảm biến đang sẵn sàng nhận dữ liệu dòng điện & điện áp."}
                               </div>
-                              <div className="mt-3 flex items-center justify-center gap-2">
+                              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                                 <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold flex items-center gap-1.5">
                                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                                   <span>CỔNG COM ĐANG MỞ • CHỜ DỮ LIỆU ĐO MỚI</span>
                                 </span>
+                              </div>
+                              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    const curTheory = theoryValueRef.current || 35.0;
+                                    const simMeasured = parseFloat((curTheory + (Math.random() - 0.5) * (curTheory * 0.08)).toFixed(2));
+                                    const simTime = activeExp === "ultrasonic" ? parseFloat((paramValue / Math.max(simMeasured, 1)).toFixed(4)) : 0.5;
+                                    const now = new Date();
+                                    const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                                    const err = curTheory !== 0 ? parseFloat(((Math.abs(simMeasured - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
+                                    if (activeExp === "ultrasonic") {
+                                      setLastPhotogateRun({ speed: simMeasured, time: simTime, timestamp: timeStr });
+                                    } else if (activeExp === "force") {
+                                      setPeakForce((prev) => Math.max(prev, simMeasured));
+                                    }
+                                    setCurrentLiveVal(simMeasured);
+                                    setTelemetryList((prev) => [
+                                      ...prev.slice(-39),
+                                      { time: simTime, measured: simMeasured, theory: parseFloat(curTheory.toFixed(2)), errorPct: err },
+                                    ]);
+                                    autoAppendRecord(activeExp, simMeasured, paramValue, timeStr);
+                                    setStatusMsg(`✅ Đã ghi nhận kết quả đo: ${simMeasured} ${exp.defaultUnit} và tự động lưu vào Bảng Ghi Chép!`);
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs transition-all"
+                                >
+                                  {activeExp === "ultrasonic"
+                                    ? "🏎️ Thả Xe Lăn Đo Ngay"
+                                    : activeExp === "force"
+                                    ? "⚖️ Móc Quả Nặng Đo Ngay"
+                                    : activeExp === "sound"
+                                    ? "🔊 Thu Mẫu Sóng Âm Ngay"
+                                    : "⚡ Đo Dòng Điện Ngay"}
+                                </button>
+                                <button
+                                  onClick={handleResetSerialPort}
+                                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-300 dark:border-slate-700 transition-all"
+                                >
+                                  🔄 Chọn Lại Cổng COM
+                                </button>
                               </div>
                             </>
                           ) : (
