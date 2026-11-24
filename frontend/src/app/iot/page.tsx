@@ -1714,6 +1714,18 @@ export default function VernierIoTPage() {
         setShowNewPcDriverGuide(true);
       }
 
+      // Quan trọng đối với USB Composite Device (COM9 - CH343 / ESP32 Native USB):
+      // Đặt DTR và RTS về cùng mức logic để mạch transistor auto-reset nhả chân EN (không giữ ESP32 ở trạng thái Reset)
+      try {
+        if (typeof port.setSignals === "function") {
+          if (chipInfo.vid === 0x303a) {
+            await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+          } else {
+            await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+          }
+        }
+      } catch (e) {}
+
       mgr.port = port;
       mgr.keepReading = true;
       serialPortRef.current = port;
@@ -1730,11 +1742,19 @@ export default function VernierIoTPage() {
           : `⚠️ Đã mở ${chipInfo.label}. Nếu không thấy dữ liệu, máy tính mới cần cài Driver CP210x/CH340 và chọn đúng cổng USB ESP32!`
       );
 
+      let receivedBytesCount = 0;
+
       // Tự động gửi lệnh đồng bộ bài thí nghiệm hiện tại xuống ESP32 (sau khi ESP32 hoàn tất khởi động)
       setTimeout(() => {
         sendSerialCommand(`MODE:${activeExpRef.current}`);
       }, 700);
-      setTimeout(() => {
+      setTimeout(async () => {
+        // Nếu sau 1.6s trên cổng USB Composite Device (CH343/CDC) chưa nhận byte nào, bật DTR=true & RTS=true (vẫn cùng mức logic để không reset) nhằm kích hoạt luồng CDC trên Windows
+        if (receivedBytesCount === 0 && typeof port.setSignals === "function") {
+          try {
+            await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+          } catch (e) {}
+        }
         sendSerialCommand(`MODE:${activeExpRef.current}`);
       }, 1600);
 
@@ -1751,6 +1771,7 @@ export default function VernierIoTPage() {
           const { value, done } = await reader.read();
           if (done) break;
           if (value) {
+            receivedBytesCount += value.length;
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split("\n");
             buffer = lines.pop() || "";
