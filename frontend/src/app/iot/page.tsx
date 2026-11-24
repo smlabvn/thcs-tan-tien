@@ -700,8 +700,12 @@ export default function VernierIoTPage() {
         reader: null,
         keepReading: false,
         isLoopRunning: false,
+        loopId: 0,
         onLine: null as ((line: string) => void) | null,
       };
+    }
+    if (typeof w.__physixSerialMgr.loopId !== "number") {
+      w.__physixSerialMgr.loopId = 0;
     }
     return w.__physixSerialMgr;
   };
@@ -1384,9 +1388,9 @@ export default function VernierIoTPage() {
       return;
     }
     if (trimmed.includes(">> [RESET]")) {
+      // Chỉ xóa cờ chống trùng lặp để sẵn sàng nhận lượt thả xe mới (giữ nguyên kết quả lượt vừa chạy trên màn hình Web!)
       lastPhotogateRunRef.current = null;
-      setLastPhotogateRun(null);
-      setStatusMsg("ESP32 đã Reset thành công! Sẵn sàng cho lượt thả xe mới.");
+      setStatusMsg("✅ Cổng quang trên hộp ESP32 đã mở khóa (SAN SANG: THA XE)! Hãy thả xe qua Cổng A → Cổng B.");
       return;
     }
     if (trimmed.includes(">> [TARE]")) {
@@ -1479,6 +1483,12 @@ export default function VernierIoTPage() {
 
           // TỰ ĐỘNG LƯU KẾT QUẢ VÀO BẢNG SỐ LIỆU THÍ NGHIỆM!
           autoAppendRecord("ultrasonic", speedVal, usedS, timeStr);
+
+          // Tự động gửi lệnh RESET xuống hộp ESP32 sau 2.5 giây để hộp tự mở khóa Cổng A & Cổng B cho lượt thả xe tiếp theo
+          // (mà học sinh không cần phải bấm Nút 1 trên hộp sau mỗi lần thả xe!)
+          setTimeout(() => {
+            sendSerialCommand("RESET");
+          }, 2500);
         }
 
         setCurrentLiveVal(speedVal);
@@ -1585,8 +1595,32 @@ export default function VernierIoTPage() {
     // Luôn gắn callback mới nhất
     mgr.onLine = (line: string) => processIncomingSerialLineRef.current(line);
 
+    // Hàm dừng vòng lặp đọc cũ an toàn tuyệt đối (không để khối finally của luồng cũ đóng nhầm cổng mới!)
+    const stopOldLoopSafely = async (closeOldPort: boolean) => {
+      mgr.loopId = (mgr.loopId || 0) + 1;
+      mgr.keepReading = false;
+      mgr.isLoopRunning = false;
+      if (mgr.reader) {
+        const oldReader = mgr.reader;
+        mgr.reader = null;
+        try {
+          await oldReader.cancel();
+        } catch (e) {}
+        try {
+          oldReader.releaseLock();
+        } catch (e) {}
+      }
+      if (closeOldPort && mgr.port) {
+        const oldPort = mgr.port;
+        mgr.port = null;
+        try {
+          await oldPort.close();
+        } catch (e) {}
+      }
+    };
+
     // TRƯỜNG HỢP 1: Khi tự động kết nối (promptUser === false), nếu cổng USB thật đã mở và vòng lặp đang chạy sẵn thì tái sử dụng
-    if (!promptUser && mgr.port && mgr.isLoopRunning) {
+    if (!promptUser && mgr.port && mgr.isLoopRunning && mgr.keepReading && mgr.port.readable) {
       const chip = getPortChipInfo(mgr.port);
       if (chip.isUsbChip) {
         serialPortRef.current = mgr.port;
@@ -1609,31 +1643,36 @@ export default function VernierIoTPage() {
 
       if (promptUser) {
         // Khi người dùng CHỦ ĐỘNG bấm nút Kết nối / Chọn lại cổng COM:
-        // LUÔN mở hộp thoại chọn cổng của Chrome ngay lập tức (tránh bị kẹt ở COM1 cũ trên máy tính mới!)
+        // LUÔN mở hộp thoại chọn cổng của Chrome ngay lập tức (giữ nguyên User Gesture)
         setConnectionStatus("connecting");
         setStatusMsg("Đang mở bảng chọn cổng COM/USB trên trình duyệt...");
         // @ts-ignore
         port = await navigator.serial.requestPort();
 
-        // Nếu trước đó đang mở một cổng khác, đóng cổng cũ sạch sẽ trước khi mở cổng mới
-        if (mgr.port && mgr.port !== port) {
-          mgr.keepReading = false;
-          mgr.isLoopRunning = false;
-          if (mgr.reader) {
-            try {
-              await mgr.reader.cancel();
-              mgr.reader.releaseLock();
-            } catch (e) {}
-            mgr.reader = null;
-          }
-          try {
-            await mgr.port.close();
-          } catch (e) {}
-          mgr.port = null;
+        // Nếu người dùng chọn lại chính cổng đang mở và vòng lặp đọc đang sống khỏe -> Giữ nguyên luồng và gửi lệnh kích hoạt ngay!
+        if (mgr.port === port && mgr.isLoopRunning && mgr.keepReading && port.readable) {
+          const chip = getPortChipInfo(port);
+          serialPortRef.current = port;
+          serialReaderRef.current = mgr.reader;
+          keepReadingRef.current = true;
+          setPortChipInfo(chip);
+          setExpMode("hardware");
+          setConnectionType("serial");
+          setConnectionStatus("connected");
+          setIsRecording(true);
+          isRecordingRef.current = true;
+          sendSerialCommand(`DIST:${paramValueRef.current}`);
+          sendSerialCommand("RESET");
+          sendSerialCommand(`MODE:${activeExpRef.current}`);
+          setStatusMsg(`✓ Đã kết nối & gửi lệnh mở khóa cổng quang xuống ${chip.label}!`);
+          return;
         }
+
+        // Dừng sạch sẽ mọi vòng lặp đọc cũ trước khi mở hoặc gắn reader mới
+        await stopOldLoopSafely(Boolean(mgr.port && mgr.port !== port));
       } else {
         // Khi tự động kết nối ngầm lúc mới tải trang (promptUser === false):
-        // Chỉ tự động kết nối với cổng USB Serial THẬT (có usbVendorId như CP210x/CH340), TUYỆT ĐỐI KHÔNG tự vào COM1 của mainboard!
+        // Chỉ tự động kết nối với cổng USB Serial THẬT (có usbVendorId như CP210x/CH340/CH343/ESP32)
         try {
           // @ts-ignore
           const authorizedPorts = await navigator.serial.getPorts();
@@ -1645,7 +1684,6 @@ export default function VernierIoTPage() {
                   port = p;
                 }
               } else {
-                // Tự động xóa quyền nhớ cổng COM1 mặc định để không bị kết nối nhầm
                 try {
                   if (typeof p.forget === "function") await p.forget();
                 } catch (e) {}
@@ -1655,6 +1693,7 @@ export default function VernierIoTPage() {
         } catch (e) {}
 
         if (!port) return;
+        await stopOldLoopSafely(Boolean(mgr.port && mgr.port !== port));
       }
 
       // Mở cổng nếu chưa mở (port.readable === null nghĩa là chưa mở)
@@ -1673,30 +1712,11 @@ export default function VernierIoTPage() {
         }
       }
 
-      // Nếu port.readable đang bị khóa bởi một reader cũ, giải phóng reader để gắn vòng lặp đọc mới
-      if (port.readable && port.readable.locked) {
-        if (mgr.reader) {
-          try {
-            await mgr.reader.cancel();
-            mgr.reader.releaseLock();
-          } catch (e) {}
-          mgr.reader = null;
-        }
+      if (!port.readable) {
+        throw new Error("Không thể mở luồng đọc từ cổng COM. Hãy rút cáp USB cắm lại rồi bấm Kết nối.");
       }
 
-      if (port.readable && port.readable.locked) {
-        // Nếu cổng đã có vòng lặp đọc chạy sẵn và đúng là cùng port
-        if (mgr.port === port && mgr.isLoopRunning) {
-          const chip = getPortChipInfo(port);
-          setPortChipInfo(chip);
-          setExpMode("hardware");
-          setConnectionType("serial");
-          setConnectionStatus("connected");
-          setIsRecording(true);
-          isRecordingRef.current = true;
-          setStatusMsg(`✓ Đã kết nối ${chip.label} (${exp.baudRate} bps)!`);
-          return;
-        }
+      if (port.readable.locked) {
         try {
           if (typeof port.forget === "function") {
             await port.forget();
@@ -1714,21 +1734,16 @@ export default function VernierIoTPage() {
         setShowNewPcDriverGuide(true);
       }
 
-      // Quan trọng đối với USB Composite Device (COM9 - CH343 / ESP32 Native USB):
-      // Đặt DTR và RTS về cùng mức logic để mạch transistor auto-reset nhả chân EN (không giữ ESP32 ở trạng thái Reset)
-      try {
-        if (typeof port.setSignals === "function") {
-          if (chipInfo.vid === 0x303a) {
-            await port.setSignals({ dataTerminalReady: true, requestToSend: true });
-          } else {
-            await port.setSignals({ dataTerminalReady: false, requestToSend: false });
-          }
-        }
-      } catch (e) {}
-
+      // Khởi tạo reader TRƯỚC khi đánh dấu connected
+      const reader = port.readable.getReader();
+      const myLoopId = (mgr.loopId || 0) + 1;
+      mgr.loopId = myLoopId;
       mgr.port = port;
+      mgr.reader = reader;
       mgr.keepReading = true;
+      mgr.isLoopRunning = true;
       serialPortRef.current = port;
+      serialReaderRef.current = reader;
       keepReadingRef.current = true;
 
       setExpMode("hardware");
@@ -1738,38 +1753,56 @@ export default function VernierIoTPage() {
       isRecordingRef.current = true;
       setStatusMsg(
         chipInfo.isUsbChip
-          ? `✓ Đã kết nối ${chipInfo.label} (${exp.baudRate} bps)! Đang nhận dữ liệu từ hộp ESP32...`
+          ? `✓ Đã kết nối ${chipInfo.label} (${exp.baudRate} bps)! Đang đồng bộ với hộp ESP32...`
           : `⚠️ Đã mở ${chipInfo.label}. Nếu không thấy dữ liệu, máy tính mới cần cài Driver CP210x/CH340 và chọn đúng cổng USB ESP32!`
       );
 
       let receivedBytesCount = 0;
 
-      // Tự động gửi lệnh đồng bộ bài thí nghiệm hiện tại xuống ESP32 (sau khi ESP32 hoàn tất khởi động)
-      setTimeout(() => {
-        sendSerialCommand(`MODE:${activeExpRef.current}`);
-      }, 700);
-      setTimeout(async () => {
-        // Nếu sau 1.6s trên cổng USB Composite Device (CH343/CDC) chưa nhận byte nào, bật DTR=true & RTS=true (vẫn cùng mức logic để không reset) nhằm kích hoạt luồng CDC trên Windows
-        if (receivedBytesCount === 0 && typeof port.setSignals === "function") {
-          try {
-            await port.setSignals({ dataTerminalReady: true, requestToSend: true });
-          } catch (e) {}
+      // Hàm gửi gói lệnh đồng bộ & mở khóa cổng quang (DIST + RESET hoạt động trên MỌI phiên bản firmware của hộp!)
+      const sendSyncAndUnlockPing = () => {
+        if (mgr.loopId !== myLoopId || !mgr.keepReading) return;
+        sendSerialCommand(`DIST:${paramValueRef.current}`);
+        if (activeExpRef.current === "ultrasonic") {
+          sendSerialCommand("RESET");
         }
         sendSerialCommand(`MODE:${activeExpRef.current}`);
-      }, 1600);
+      };
 
-      const reader = port.readable.getReader();
-      mgr.reader = reader;
-      mgr.isLoopRunning = true;
-      serialReaderRef.current = reader;
+      // Ping lần 1 (450ms): Giữ nguyên tín hiệu DTR/RTS mặc định của hệ điều hành
+      setTimeout(() => {
+        sendSyncAndUnlockPing();
+      }, 450);
+
+      // Ping lần 2 (1300ms): Nếu chưa nhận được byte phản hồi nào, thử đặt DTR=false & RTS=false (nhả transistor auto-reset CH340/CP210x) rồi ping lại
+      setTimeout(async () => {
+        if (mgr.loopId !== myLoopId || !mgr.keepReading) return;
+        if (receivedBytesCount === 0 && typeof port.setSignals === "function") {
+          try {
+            await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+          } catch (e) {}
+        }
+        setTimeout(() => sendSyncAndUnlockPing(), 250);
+      }, 1300);
+
+      // Ping lần 3 (2400ms): Nếu vẫn chưa nhận byte nào trên USB Composite Device (CH343/ESP32 CDC), bật DTR=true & RTS=false rồi ping lại
+      setTimeout(async () => {
+        if (mgr.loopId !== myLoopId || !mgr.keepReading) return;
+        if (receivedBytesCount === 0 && typeof port.setSignals === "function") {
+          try {
+            await port.setSignals({ dataTerminalReady: true, requestToSend: false });
+          } catch (e) {}
+        }
+        setTimeout(() => sendSyncAndUnlockPing(), 250);
+      }, 2400);
 
       const decoder = new TextDecoder();
       let buffer = "";
 
       try {
-        while (mgr.keepReading) {
+        while (mgr.keepReading && mgr.loopId === myLoopId) {
           const { value, done } = await reader.read();
-          if (done) break;
+          if (done || !mgr.keepReading || mgr.loopId !== myLoopId) break;
           if (value) {
             receivedBytesCount += value.length;
             buffer += decoder.decode(value, { stream: true });
@@ -1789,21 +1822,24 @@ export default function VernierIoTPage() {
         try {
           reader.releaseLock();
         } catch (e) {}
-        mgr.reader = null;
-        mgr.isLoopRunning = false;
 
-        // Nếu vòng lặp kết thúc ngoài ý muốn (rút cáp USB hoặc lỏng dây D+/D-)
-        if (mgr.keepReading) {
-          mgr.keepReading = false;
-          try {
-            await port.close();
-          } catch (e) {}
-          mgr.port = null;
-          serialPortRef.current = null;
-          keepReadingRef.current = false;
-          setConnectionStatus("disconnected");
-          setConnectionType("none");
-          setStatusMsg("⚠️ Đã mất kết nối dữ liệu USB với ESP32. Hãy kiểm tra lại đầu cáp USB và bấm 'Cắm USB Serial' để kết nối lại!");
+        // CHỈ xử lý đóng cổng nếu đây vẫn là vòng lặp hiện hành (không phải vòng lặp cũ vừa bị thay thế!)
+        if (mgr.loopId === myLoopId) {
+          mgr.reader = null;
+          mgr.isLoopRunning = false;
+
+          if (mgr.keepReading) {
+            mgr.keepReading = false;
+            try {
+              await port.close();
+            } catch (e) {}
+            mgr.port = null;
+            serialPortRef.current = null;
+            keepReadingRef.current = false;
+            setConnectionStatus("disconnected");
+            setConnectionType("none");
+            setStatusMsg("⚠️ Đã mất kết nối dữ liệu USB với ESP32. Hãy kiểm tra lại đầu cáp USB và bấm 'Chọn Cổng COM ESP32' để kết nối lại!");
+          }
         }
       }
     } catch (err: any) {
@@ -3266,46 +3302,68 @@ export default function VernierIoTPage() {
                   </div>
                 ) : (
                   <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2 text-sky-800 dark:text-sky-300">
-                      <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping" />
-                      <span>
-                        <strong>2 Cổng quang đang sẵn sàng:</strong> Hãy thả xe lăn qua Cổng A rồi Cổng B, hệ thống sẽ tự động bắt trọn vẹn tốc độ và thời gian!
-                      </span>
+                    <div className="flex flex-col gap-0.5 text-sky-800 dark:text-sky-300">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping shrink-0" />
+                        <span>
+                          <strong>2 Cổng quang đang sẵn sàng:</strong> Nếu màn hình OLED trên hộp đen đang hiện <code>DA QUA 2 CONG!</code>, hãy bấm <strong>Nút xanh trái (N1)</strong> trên hộp (hoặc nút <strong>Mở Khóa Hộp</strong> bên phải) để về <code>SAN SANG: THA XE</code> rồi thả xe qua Cổng A → Cổng B!
+                        </span>
+                      </div>
+                      {lastRawLine && (
+                        <div className="text-[11px] font-mono text-emerald-700 dark:text-emerald-300 pl-4">
+                          📟 Phản hồi trực tiếp từ hộp ESP32: &ldquo;{lastRawLine}&rdquo;
+                        </div>
+                      )}
                     </div>
-                    <button
-                      onClick={() => {
-                        const simSpeed = parseFloat((35.0 + (Math.random() - 0.5) * 4.0).toFixed(2));
-                        const simTime = parseFloat((paramValue / simSpeed).toFixed(4));
-                        const now = new Date();
-                        const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-                        const curTheory = theoryValueRef.current || 35.0;
-                        const err = curTheory !== 0 ? parseFloat(((Math.abs(simSpeed - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
-                        setLastPhotogateRun({
-                          speed: simSpeed,
-                          time: simTime,
-                          timestamp: timeStr,
-                        });
-                        setCurrentLiveVal(simSpeed);
-                        setTelemetryList((prev) => {
-                          const nextTime = prev.length > 0 ? parseFloat((prev[prev.length - 1].time + simTime).toFixed(2)) : simTime;
-                          return [
-                            ...prev.slice(-39),
-                            {
-                              time: nextTime,
-                              measured: simSpeed,
-                              theory: parseFloat(curTheory.toFixed(2)),
-                              errorPct: err,
-                            },
-                          ];
-                        });
-                        autoAppendRecord("ultrasonic", simSpeed, paramValue, timeStr);
-                        setStatusMsg(`✅ Đã ghi nhận lượt chạy xe: v = ${simSpeed} cm/s (t = ${simTime} s) và tự động lưu vào Bảng Ghi Chép!`);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] shadow-xs transition-all"
-                      title="Chạy thử nghiệm lượt thả xe lăn và lưu kết quả"
-                    >
-                      🏎️ Thả Thử Xe Lăn
-                    </button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {connectionStatus === "connected" && (
+                        <button
+                          onClick={() => {
+                            sendSerialCommand("RESET");
+                            sendSerialCommand(`DIST:${paramValue}`);
+                            setStatusMsg("Đã gửi lệnh RESET mở khóa lượt đo mới xuống hộp ESP32!");
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer"
+                          title="Mở khóa cổng quang trên hộp ESP32 (tương đương bấm Nút 1: Lượt mới)"
+                        >
+                          🔓 Mở Khóa Hộp (Lượt Mới)
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          const simSpeed = parseFloat((35.0 + (Math.random() - 0.5) * 4.0).toFixed(2));
+                          const simTime = parseFloat((paramValue / simSpeed).toFixed(4));
+                          const now = new Date();
+                          const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                          const curTheory = theoryValueRef.current || 35.0;
+                          const err = curTheory !== 0 ? parseFloat(((Math.abs(simSpeed - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
+                          setLastPhotogateRun({
+                            speed: simSpeed,
+                            time: simTime,
+                            timestamp: timeStr,
+                          });
+                          setCurrentLiveVal(simSpeed);
+                          setTelemetryList((prev) => {
+                            const nextTime = prev.length > 0 ? parseFloat((prev[prev.length - 1].time + simTime).toFixed(2)) : simTime;
+                            return [
+                              ...prev.slice(-39),
+                              {
+                                time: nextTime,
+                                measured: simSpeed,
+                                theory: parseFloat(curTheory.toFixed(2)),
+                                errorPct: err,
+                              },
+                            ];
+                          });
+                          autoAppendRecord("ultrasonic", simSpeed, paramValue, timeStr);
+                          setStatusMsg(`✅ Đã ghi nhận lượt chạy xe: v = ${simSpeed} cm/s (t = ${simTime} s) và tự động lưu vào Bảng Ghi Chép!`);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer"
+                        title="Chạy thử nghiệm lượt thả xe lăn và lưu kết quả"
+                      >
+                        🏎️ Thả Thử Xe Lăn
+                      </button>
+                    </div>
                   </div>
                 )
               )}
