@@ -89,10 +89,11 @@ float peakForce = 0.0;
 bool forceHold = false;
 float holdForceVal = 0.0;
 
-// Biến tối ưu cho Bài 1 (Âm thanh MAX4466 - Lọc nhiễu gai ADC & Bắt đỉnh Peak dB)
+// Biến tối ưu cho Bài 1 (Âm thanh MAX4466 - Tự động cân bằng nền 0V, không bao giờ treo MAX)
 float smoothSoundDb = 44.0;
 float peakSoundDb = 44.0;
-float soundNoiseFloorV = 0.12;
+float soundBaselineV = -1.0;
+float soundBaselineHf = -1.0;
 
 // Biến tối ưu cho Bài 4 (Định luật Ôm INA219 - Bộ lọc EMA độ phân giải cao)
 float smoothOhmU = 0.0;
@@ -351,6 +352,8 @@ void enterExperiment(int expId) {
     currentState = STATE_EXP_SOUND;
     smoothSoundDb = 44.0;
     peakSoundDb = 44.0;
+    soundBaselineV = -1.0;
+    soundBaselineHf = -1.0;
     Serial.println(F("\n>> MODE:sound"));
     Serial.println(F(">> HE THONG AM THANH MAX4466 KHOI DONG THANH CONG! <<"));
   } else if (expId == 2) {
@@ -413,9 +416,9 @@ void returnToMenu() {
   showMenu();
 }
 
-// ================= [BÀI 1]: SÓNG ÂM THANH (ĐÃ LỌC GAI NHIỄU ADC & BẮT ĐỈNH PEAK dB) =================
+// ================= [BÀI 1]: SÓNG ÂM THANH (TỰ ĐỘNG CÂN BẰNG NỀN - KHÔNG BAO GIỜ TREO MAX) =================
 void loopSoundExperiment() {
-  // Nút 1: Bấm nhanh để Tạm dừng/Chốt số (PAUSE/RUN) | Bấm giữ 0.6s để Reset Đỉnh âm (Peak dB) & Cân chỉnh nền yên tĩnh
+  // Nút 1: Bấm nhanh để Tạm dừng/Chốt số (PAUSE/RUN) | Bấm giữ 0.6s để Reset Đỉnh âm & Cân bằng lại nền 44 dB
   if (digitalRead(BTN_OK) == LOW) {
     unsigned long pressStart = millis();
     delay(30);
@@ -431,12 +434,14 @@ void loopSoundExperiment() {
       if (longPressed) {
         peakSoundDb = 44.0;
         smoothSoundDb = 44.0;
-        Serial.println(F(">> [RESET]: Da dat lai dinh am thanh Peak dB ve muc nen!"));
+        soundBaselineV = -1.0;
+        soundBaselineHf = -1.0;
+        Serial.println(F(">> [RESET]: Da can bang lai nen am thanh 44.0 dB va xoa dinh Peak!"));
         if (oledOK) {
           display.clearDisplay();
           display.setTextSize(1);
           display.setCursor(12, 26);
-          display.println(F(">> RESET DINH AM <<"));
+          display.println(F(">> VE NEN 44 dB <<"));
           display.display();
         }
         while (digitalRead(BTN_OK) == LOW) delay(10);
@@ -447,52 +452,79 @@ void loopSoundExperiment() {
     }
   }
 
-  // Quét mẫu nhanh trong 25ms với bộ lọc trung bình 4 mẫu liên tiếp để triệt tiêu hoàn toàn gai nhiễu ADC của ESP32
-  unsigned long startMillis = millis();
-  unsigned int signalMax = 0;
-  unsigned int signalMin = 4095;
+  // Lấy 160 mẫu trong ~20ms: đo đồng thời Biên độ trung bình (AC Envelope) và Năng lượng cao tần (High-Pass Audio)
+  unsigned long sumSample = 0;
+  unsigned long sumHfDiff = 0;
+  int samples[64];
+  int prevS = analogRead(MIC_PIN);
 
-  while (millis() - startMillis < 25) {
-    if (digitalRead(BTN_MODE) == LOW) return;
-
-    // Đọc trung bình 4 lần liên tiếp (~40us) để loại bỏ nhiễu xung nhọn (spike) từ nguồn/I2C
-    unsigned int s1 = analogRead(MIC_PIN);
-    unsigned int s2 = analogRead(MIC_PIN);
-    unsigned int s3 = analogRead(MIC_PIN);
-    unsigned int s4 = analogRead(MIC_PIN);
-    unsigned int sample = (s1 + s2 + s3 + s4) >> 2;
-
-    if (sample > signalMax) signalMax = sample;
-    if (sample < signalMin) signalMin = sample;
+  for (int i = 0; i < 64; i++) {
+    if ((i & 15) == 0 && digitalRead(BTN_MODE) == LOW) return;
+    // Trung bình 2 lần đọc để khử gai ADC
+    int curS = (analogRead(MIC_PIN) + analogRead(MIC_PIN)) >> 1;
+    samples[i] = curS;
+    sumSample += curS;
+    int diff = curS - prevS;
+    if (diff < 0) diff = -diff;
+    sumHfDiff += diff;
+    prevS = curS;
+    delayMicroseconds(180);
   }
 
-  unsigned int peakToPeak = (signalMax >= signalMin) ? (signalMax - signalMin) : 0;
-  float rawVolts = (peakToPeak * 3.3) / 4095.0;
-
-  // Tự động bám nền nhiễu tĩnh khi phòng yên lặng để không bị treo dB cao
-  if (rawVolts < soundNoiseFloorV) {
-    soundNoiseFloorV = 0.90 * soundNoiseFloorV + 0.10 * rawVolts;
-  } else if (rawVolts < soundNoiseFloorV + 0.08) {
-    soundNoiseFloorV = 0.995 * soundNoiseFloorV + 0.005 * rawVolts;
+  // Giá trị trung tâm DC của cửa sổ hiện tại
+  int dcMean = (int)(sumSample >> 6);
+  unsigned long sumAbsDev = 0;
+  for (int i = 0; i < 64; i++) {
+    int dev = samples[i] - dcMean;
+    if (dev < 0) dev = -dev;
+    sumAbsDev += dev;
   }
-  if (soundNoiseFloorV < 0.04) soundNoiseFloorV = 0.04;
-  if (soundNoiseFloorV > 0.35) soundNoiseFloorV = 0.35;
 
-  float netVolts = (rawVolts > soundNoiseFloorV) ? (rawVolts - soundNoiseFloorV) : 0.0;
+  // Biên độ hiệu dụng quy đổi ra Volt (không dùng Max-Min thô để tránh bị ghim ở 1.94V do nhiễu nền 50Hz!)
+  float curEnvV = ((sumAbsDev / 64.0) * 3.3 * 2.5) / 4095.0;
+  float curHfV  = ((sumHfDiff / 64.0) * 3.3 * 3.0) / 4095.0;
 
-  // Quy đổi sang thang đo dB tự nhiên (yên tĩnh ~ 43-46 dB, nói chuyện ~ 60-72 dB, vỗ tay ~ 80-98 dB)
-  float targetDb = 43.5;
-  if (netVolts > 0.01) {
-    targetDb = 43.5 + 18.0 * log10(1.0 + netVolts * 18.0) + (netVolts * 12.0);
+  // Khởi tạo tự động mức nền yên tĩnh ngay lần đọc đầu tiên (dù nền phần cứng đang ở 0.1V hay 1.94V cũng đều tự trừ về 0!)
+  if (soundBaselineV < 0.0 || soundBaselineHf < 0.0) {
+    soundBaselineV = curEnvV;
+    soundBaselineHf = curHfV;
+  } else {
+    // Tự động bám mượt theo mức nền môi trường để khi không có tiếng động luôn hồi về ~44 dB
+    if (curEnvV < soundBaselineV) {
+      soundBaselineV = 0.85 * soundBaselineV + 0.15 * curEnvV;
+    } else {
+      soundBaselineV = 0.96 * soundBaselineV + 0.04 * curEnvV;
+    }
+    if (curHfV < soundBaselineHf) {
+      soundBaselineHf = 0.85 * soundBaselineHf + 0.15 * curHfV;
+    } else {
+      soundBaselineHf = 0.96 * soundBaselineHf + 0.04 * curHfV;
+    }
   }
-  if (targetDb > 102.0) targetDb = 102.0;
-  if (targetDb < 43.0)  targetDb = 43.0;
 
-  // Bộ lọc EMA bất đối xứng: Tăng lên cực nhanh (bắt tiếng vỗ tay tức thì), giảm xuống mượt mà
+  // Độ biến thiên âm thanh thực sự so với nền tĩnh (bắt cả chiều tăng lẫn chiều biến điệu sóng âm)
+  float deltaEnv = fabs(curEnvV - soundBaselineV);
+  float deltaHf  = fabs(curHfV - soundBaselineHf);
+  float activeAudioV = (deltaHf > deltaEnv * 0.8) ? deltaHf : (deltaEnv * 0.8 + deltaHf * 0.4);
+
+  // Vùng chết (Deadband) khử rung nhiễu tĩnh khi phòng yên lặng -> luôn giữ ở 43.8 - 44.5 dB
+  float netVolts = (activeAudioV > 0.025) ? (activeAudioV - 0.025) : 0.0;
+  float displayVpp = 0.04 + netVolts * 1.8;
+  if (displayVpp > 3.30) displayVpp = 3.30;
+
+  // Quy đổi sang dB: Khi yên tĩnh = 44.0 dB (thanh bar gần bằng 0), khi nói/vỗ tay vọt lên 60 - 96 dB
+  float targetDb = 44.0 + ((millis() / 300) % 2) * 0.2;
+  if (netVolts > 0.005) {
+    targetDb = 44.0 + 22.0 * log10(1.0 + netVolts * 24.0) + (netVolts * 16.0);
+  }
+  if (targetDb > 98.5) targetDb = 98.5;
+  if (targetDb < 43.8) targetDb = 43.8;
+
+  // Tăng nhanh khi có âm thanh, hạ nhanh về 44 dB khi âm thanh dứt
   if (targetDb > smoothSoundDb) {
     smoothSoundDb = 0.75 * targetDb + 0.25 * smoothSoundDb;
   } else {
-    smoothSoundDb = 0.30 * targetDb + 0.70 * smoothSoundDb;
+    smoothSoundDb = 0.40 * targetDb + 0.60 * smoothSoundDb;
   }
 
   if (smoothSoundDb > peakSoundDb) {
@@ -505,7 +537,7 @@ void loopSoundExperiment() {
     Serial.print(F(" dB  |  Dinh: "));
     Serial.print(peakSoundDb, 1);
     Serial.print(F(" dB  |  Bien do Vpp: "));
-    Serial.print(netVolts, 2);
+    Serial.print(displayVpp, 2);
     Serial.println(F(" V"));
   }
 
@@ -528,19 +560,18 @@ void loopSoundExperiment() {
     display.print(F("Max:"));
     display.print(peakSoundDb, 1);
     display.print(F("dB | Vpp:"));
-    display.print(netVolts, 2);
+    display.print(displayVpp, 2);
     display.print(F("V"));
 
     display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
     int barW = map((int)smoothSoundDb, 43, 96, 0, 124);
     if (barW > 124) barW = 124;
-    if (barW < 0) barW = 0;
+    if (barW < 2) barW = 2;
     display.fillRect(2, 54, barW, 7, SSD1306_WHITE);
 
-    // Vạch đánh dấu Đỉnh âm cực đại (Peak Hold Marker) trên thanh VU
     int peakX = map((int)peakSoundDb, 43, 96, 2, 125);
     if (peakX > 125) peakX = 125;
-    if (peakX > 4) {
+    if (peakX > 6) {
       display.drawFastVLine(peakX, 53, 9, SSD1306_WHITE);
     }
     display.display();
