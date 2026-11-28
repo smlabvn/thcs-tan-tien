@@ -38,8 +38,12 @@ void setup() {
   pinMode(BTN_1, INPUT_PULLUP);
   pinMode(BTN_2, INPUT_PULLUP);
 
-  // 1. Khởi động I2C trên GPIO 21 (SDA) và GPIO 22 (SCL)
+  // 1. Khởi động I2C (ESP32: SDA=21, SCL=22 | Arduino Uno/Nano: A4, A5)
+#if defined(ESP32)
   Wire.begin(21, 22);
+#else
+  Wire.begin();
+#endif
 
   // 2. Thử kết nối OLED tại địa chỉ 0x3C
   if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
@@ -98,7 +102,9 @@ void loop() {
     display.setCursor(0, 0);
     display.print(F("TEST NUT"));
     display.setCursor(65, 0);
-    display.printf("T: %lus", millis() / 1000);
+    display.print(F("T: "));
+    display.print(millis() / 1000);
+    display.print(F("s"));
     display.drawFastHLine(0, 10, 128, SSD1306_WHITE);
 
     // Dòng hiển thị NÚT 1 (GPIO 18)
@@ -109,10 +115,14 @@ void loop() {
       display.fillRect(45, 14, 80, 11, SSD1306_WHITE);
       display.setTextColor(SSD1306_BLACK);
       display.setCursor(48, 16);
-      display.printf("BAM! (%d)", countBtn1);
+      display.print(F("BAM! ("));
+      display.print(countBtn1);
+      display.print(F(")"));
       display.setTextColor(SSD1306_WHITE);
     } else {
-      display.printf("Nha  (%d)", countBtn1);
+      display.print(F("Nha  ("));
+      display.print(countBtn1);
+      display.print(F(")"));
     }
 
     // Dòng hiển thị NÚT 2 (GPIO 19)
@@ -123,10 +133,14 @@ void loop() {
       display.fillRect(45, 29, 80, 11, SSD1306_WHITE);
       display.setTextColor(SSD1306_BLACK);
       display.setCursor(48, 31);
-      display.printf("BAM! (%d)", countBtn2);
+      display.print(F("BAM! ("));
+      display.print(countBtn2);
+      display.print(F(")"));
       display.setTextColor(SSD1306_WHITE);
     } else {
-      display.printf("Nha  (%d)", countBtn2);
+      display.print(F("Nha  ("));
+      display.print(countBtn2);
+      display.print(F(")"));
     }
 
     // Khung trang trí & Thanh đo đồ họa ở đáy màn hình

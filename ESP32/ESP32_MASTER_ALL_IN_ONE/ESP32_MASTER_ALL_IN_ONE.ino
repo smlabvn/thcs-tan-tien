@@ -3,7 +3,7 @@
 //             TRƯỜNG THCS TÂY TIẾN - ĐỀ TÀI KHOA HỌC KỸ THUẬT (KHKT)
 //
 // TÍCH HỢP 4 BÀI THÍ NGHIỆM TRÊN 1 BO MẠCH DUY NHẤT (ESP32 Type-C WROOM-32)
-// CHỌN & CHUYỂN ĐỔI BÀI THÍ NGHIỆM TIỆN LỢI QUA 2 NÚT NHẤN VẬT LÝ & OLED
+// CHỌN & CHUYỂN ĐỔI BÀI THÍ NGHIỆM TIỆN LỢI QUA 2 NÚT NHẤN VẬT LÝ, OLED & WEB SERIAL
 //
 // * QUY TẮC ĐIỀU KHIỂN:
 //   - KHI Ở MENU CHÍNH:
@@ -11,12 +11,12 @@
 //       + NÚT 1 (GPIO 18): Nhấn để VÀO BÀI ĐÃ CHỌN (OK)
 //   - KHI ĐANG TRONG BÀI THÍ NGHIỆM:
 //       + NÚT 2 (GPIO 19): NHẤN 1 CÁI ĐỂ QUAY LẠI MENU CHỌN BÀI KHÁC NGAY!
-//       + NÚT 1 (GPIO 18): Tạm dừng / Tiếp tục (Loadcell: Tare về 0)
+//       + NÚT 1 (GPIO 18): Tạm dừng / Tiếp tục / Đặt lại lượt mới / Tare về 0
 //
 // * SƠ ĐỒ CHÂN:
 //   1. OLED 0.96" I2C           : SDA -> GPIO 21, SCL -> GPIO 22 (0x3C)
-//   2. NÚT 1 (XANH)             : GPIO 18
-//   3. NÚT 2 (ĐỎ)               : GPIO 19
+//   2. NÚT 1 (XANH TRÁI)        : GPIO 18
+//   3. NÚT 2 (XANH PHẢI)        : GPIO 19
 //   4. MICRO MAX4466 (KHTN 7)   : OUT -> GPIO 35, VCC -> 3.3V
 //   5. 2 CỔNG QUANG (KHTN 7/10) : Cổng A -> GPIO 13, Cổng B -> GPIO 25, VCC -> 5V
 //   6. LOADCELL 5KG + HX711     : DT -> GPIO 26, SCK -> GPIO 27, VCC -> 5V
@@ -36,7 +36,7 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 // Chân 2 nút nhấn vật lý
-const int BTN_OK   = 18; // Nút 1: Vào bài / Tạm dừng / Tare
+const int BTN_OK   = 18; // Nút 1: Vào bài / Tạm dừng / Reset / Tare
 const int BTN_MODE = 19; // Nút 2: Chuyển bài ở Menu / Nhấn để THOÁT VỀ MENU
 
 // Chân Micro MAX4466
@@ -80,20 +80,39 @@ volatile bool passB = false;
 bool photogateReported = false;
 float lastRecordedVel = 0.0;
 float lastRecordedTime = 0.0;
+unsigned long lastPhotogateBroadcastMs = 0;
 
 // Biến hỗ trợ thí nghiệm Lực Loadcell (Bắt đỉnh Peak & Khóa lực Hold)
+float liveForce_N = 0.0;
+float liveGrams = 0.0;
 float peakForce = 0.0;
 bool forceHold = false;
 float holdForceVal = 0.0;
 
-void IRAM_ATTR isrGateA() {
+// Biến tối ưu cho Bài 1 (Âm thanh MAX4466 - Lọc nhiễu gai ADC & Bắt đỉnh Peak dB)
+float smoothSoundDb = 44.0;
+float peakSoundDb = 44.0;
+float soundNoiseFloorV = 0.12;
+
+// Biến tối ưu cho Bài 4 (Định luật Ôm INA219 - Bộ lọc EMA độ phân giải cao)
+float smoothOhmU = 0.0;
+float smoothOhmI = 0.0;
+bool ohmFilterInit = false;
+
+#if defined(ESP32)
+#define ISR_ATTR IRAM_ATTR
+#else
+#define ISR_ATTR
+#endif
+
+void ISR_ATTR isrGateA() {
   if (currentState == STATE_EXP_PHOTOGATE && !passA) {
     timeA_us = micros();
     passA = true;
   }
 }
 
-void IRAM_ATTR isrGateB() {
+void ISR_ATTR isrGateB() {
   if (currentState == STATE_EXP_PHOTOGATE && passA && !passB) {
     timeB_us = micros();
     passB = true;
@@ -125,9 +144,13 @@ void setup() {
   pinMode(BTN_MODE, INPUT_PULLUP);
   pinMode(GATE_A_PIN, INPUT_PULLUP);
   pinMode(GATE_B_PIN, INPUT_PULLUP);
-  analogReadResolution(12);
 
+#if defined(ESP32)
+  analogReadResolution(12);
   Wire.begin(21, 22);
+#else
+  Wire.begin();
+#endif
 
   if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     oledOK = true;
@@ -146,14 +169,16 @@ void setup() {
 
   if (ina219.begin()) {
     inaOK = true;
-    ina219.setCalibration_32V_2A();
+    // Dùng thang đo độ nhạy cao 16V - 400mA (tăng độ chính xác gấp 5 lần cho mạch Định luật Ôm THCS)
+    ina219.setCalibration_16V_400mA();
   }
 
+  // Khởi tạo nhanh HX711 không chặn (Non-blocking boot: 0ms)
   scale.begin(LOADCELL_DOUT, LOADCELL_SCK);
-  if (scale.wait_ready_timeout(500)) {
+  scale.set_scale(loadcell_calib);
+  if (scale.wait_ready_timeout(120)) {
     hx711OK = true;
-    scale.set_scale(loadcell_calib);
-    scale.tare();
+    scale.tare(2); // Chỉ lấy 2 mẫu (~100ms) thay vì 10 mẫu (1000ms)
   }
 
   showMenu();
@@ -196,7 +221,7 @@ void loop() {
   }
 }
 
-// Xử lý lệnh từ Web Serial (RESET, TARE, HOLD)
+// Xử lý lệnh điều khiển 2 chiều từ Web Serial (RESET, TARE, HOLD, MODE:..., DIST:...)
 void checkSerialCommands() {
   if (Serial.available() > 0) {
     String cmd = Serial.readStringUntil('\n');
@@ -213,14 +238,21 @@ void checkSerialCommands() {
         Serial.println(F(">> [RESET]: San sang cho luot tha xe moi!"));
       } else if (currentState == STATE_EXP_LOADCELL) {
         peakForce = 0.0;
+        liveForce_N = 0.0;
+        liveGrams = 0.0;
         forceHold = false;
-        scale.tare();
+        if (scale.wait_ready_timeout(120)) scale.tare(2);
         Serial.println(F(">> [TARE]: Da dua luc ke ve 0.00 N va reset dinh!"));
+      } else if (currentState == STATE_EXP_SOUND) {
+        peakSoundDb = smoothSoundDb;
+        Serial.println(F(">> [RESET]: Da xoa dinh am thanh Peak dB!"));
       }
     } else if (cmd == "TARE") {
       if (currentState == STATE_EXP_LOADCELL) {
-        scale.tare();
+        if (scale.wait_ready_timeout(120)) scale.tare(2);
         peakForce = 0.0;
+        liveForce_N = 0.0;
+        liveGrams = 0.0;
         forceHold = false;
         Serial.println(F(">> [TARE]: Da dua luc ke ve 0.00 N!"));
       }
@@ -317,6 +349,8 @@ void enterExperiment(int expId) {
 
   if (expId == 1) {
     currentState = STATE_EXP_SOUND;
+    smoothSoundDb = 44.0;
+    peakSoundDb = 44.0;
     Serial.println(F("\n>> MODE:sound"));
     Serial.println(F(">> HE THONG AM THANH MAX4466 KHOI DONG THANH CONG! <<"));
   } else if (expId == 2) {
@@ -334,28 +368,26 @@ void enterExperiment(int expId) {
     Serial.println(F(">> HE THONG 2 CONG QUANG DIEN KHOI DONG THANH CONG! <<"));
   } else if (expId == 3) {
     currentState = STATE_EXP_LOADCELL;
+    liveForce_N = 0.0;
+    liveGrams = 0.0;
     peakForce = 0.0;
     forceHold = false;
     holdForceVal = 0.0;
-    if (scale.wait_ready_timeout(800)) {
-      scale.set_scale(loadcell_calib);
-      scale.tare();
+    scale.set_scale(loadcell_calib);
+    if (scale.wait_ready_timeout(120)) {
+      hx711OK = true;
+      scale.tare(2); // Tare siêu nhanh 2 mẫu (~100ms), không làm đơ màn hình
     }
     Serial.println(F("\n>> MODE:force"));
     Serial.println(F(">> HE THONG LUC KE LOADCELL 5KG KHOI DONG THANH CONG! <<"));
   } else if (expId == 4) {
     currentState = STATE_EXP_OHM;
+    ohmFilterInit = false;
+    if (inaOK) {
+      ina219.setCalibration_16V_400mA();
+    }
     Serial.println(F("\n>> MODE:ohm"));
     Serial.println(F(">> HE THONG DINH LUAT OHM INA219 KHOI DONG THANH CONG! <<"));
-  }
-
-  if (oledOK) {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setCursor(10, 24);
-    display.println(F("DANG KHOI DONG..."));
-    display.display();
-    delay(300);
   }
 }
 
@@ -381,42 +413,99 @@ void returnToMenu() {
   showMenu();
 }
 
-// ================= [BÀI 1]: SÓNG ÂM THANH =================
+// ================= [BÀI 1]: SÓNG ÂM THANH (ĐÃ LỌC GAI NHIỄU ADC & BẮT ĐỈNH PEAK dB) =================
 void loopSoundExperiment() {
-  // Nút 1: Tạm dừng / Tiếp tục
+  // Nút 1: Bấm nhanh để Tạm dừng/Chốt số (PAUSE/RUN) | Bấm giữ 0.6s để Reset Đỉnh âm (Peak dB) & Cân chỉnh nền yên tĩnh
   if (digitalRead(BTN_OK) == LOW) {
-    delay(40);
+    unsigned long pressStart = millis();
+    delay(30);
     if (digitalRead(BTN_OK) == LOW) {
-      isRunning = !isRunning;
-      Serial.println(isRunning ? F(">> RUN") : F(">> PAUSE"));
-      while (digitalRead(BTN_OK) == LOW) delay(10);
+      bool longPressed = false;
+      while (digitalRead(BTN_OK) == LOW) {
+        if (millis() - pressStart > 600) {
+          longPressed = true;
+          break;
+        }
+        delay(10);
+      }
+      if (longPressed) {
+        peakSoundDb = 44.0;
+        smoothSoundDb = 44.0;
+        Serial.println(F(">> [RESET]: Da dat lai dinh am thanh Peak dB ve muc nen!"));
+        if (oledOK) {
+          display.clearDisplay();
+          display.setTextSize(1);
+          display.setCursor(12, 26);
+          display.println(F(">> RESET DINH AM <<"));
+          display.display();
+        }
+        while (digitalRead(BTN_OK) == LOW) delay(10);
+      } else {
+        isRunning = !isRunning;
+        Serial.println(isRunning ? F(">> RUN") : F(">> PAUSE"));
+      }
     }
   }
 
+  // Quét mẫu nhanh trong 25ms với bộ lọc trung bình 4 mẫu liên tiếp để triệt tiêu hoàn toàn gai nhiễu ADC của ESP32
   unsigned long startMillis = millis();
   unsigned int signalMax = 0;
   unsigned int signalMin = 4095;
 
-  while (millis() - startMillis < 50) {
-    // Kiểm tra Nút 2 thoát sớm
+  while (millis() - startMillis < 25) {
     if (digitalRead(BTN_MODE) == LOW) return;
 
-    unsigned int sample = analogRead(MIC_PIN);
+    // Đọc trung bình 4 lần liên tiếp (~40us) để loại bỏ nhiễu xung nhọn (spike) từ nguồn/I2C
+    unsigned int s1 = analogRead(MIC_PIN);
+    unsigned int s2 = analogRead(MIC_PIN);
+    unsigned int s3 = analogRead(MIC_PIN);
+    unsigned int s4 = analogRead(MIC_PIN);
+    unsigned int sample = (s1 + s2 + s3 + s4) >> 2;
+
     if (sample > signalMax) signalMax = sample;
     if (sample < signalMin) signalMin = sample;
   }
 
-  unsigned int peakToPeak = signalMax - signalMin;
-  float volts = (peakToPeak * 3.3) / 4095.0;
-  float soundDb = 45.0 + (volts * 28.0);
-  if (soundDb > 105.0) soundDb = 105.0;
-  if (soundDb < 45.0)  soundDb = 45.0;
+  unsigned int peakToPeak = (signalMax >= signalMin) ? (signalMax - signalMin) : 0;
+  float rawVolts = (peakToPeak * 3.3) / 4095.0;
+
+  // Tự động bám nền nhiễu tĩnh khi phòng yên lặng để không bị treo dB cao
+  if (rawVolts < soundNoiseFloorV) {
+    soundNoiseFloorV = 0.90 * soundNoiseFloorV + 0.10 * rawVolts;
+  } else if (rawVolts < soundNoiseFloorV + 0.08) {
+    soundNoiseFloorV = 0.995 * soundNoiseFloorV + 0.005 * rawVolts;
+  }
+  if (soundNoiseFloorV < 0.04) soundNoiseFloorV = 0.04;
+  if (soundNoiseFloorV > 0.35) soundNoiseFloorV = 0.35;
+
+  float netVolts = (rawVolts > soundNoiseFloorV) ? (rawVolts - soundNoiseFloorV) : 0.0;
+
+  // Quy đổi sang thang đo dB tự nhiên (yên tĩnh ~ 43-46 dB, nói chuyện ~ 60-72 dB, vỗ tay ~ 80-98 dB)
+  float targetDb = 43.5;
+  if (netVolts > 0.01) {
+    targetDb = 43.5 + 18.0 * log10(1.0 + netVolts * 18.0) + (netVolts * 12.0);
+  }
+  if (targetDb > 102.0) targetDb = 102.0;
+  if (targetDb < 43.0)  targetDb = 43.0;
+
+  // Bộ lọc EMA bất đối xứng: Tăng lên cực nhanh (bắt tiếng vỗ tay tức thì), giảm xuống mượt mà
+  if (targetDb > smoothSoundDb) {
+    smoothSoundDb = 0.75 * targetDb + 0.25 * smoothSoundDb;
+  } else {
+    smoothSoundDb = 0.30 * targetDb + 0.70 * smoothSoundDb;
+  }
+
+  if (smoothSoundDb > peakSoundDb) {
+    peakSoundDb = smoothSoundDb;
+  }
 
   if (isRunning) {
     Serial.print(F("Do to: "));
-    Serial.print(soundDb, 1);
+    Serial.print(smoothSoundDb, 1);
+    Serial.print(F(" dB  |  Dinh: "));
+    Serial.print(peakSoundDb, 1);
     Serial.print(F(" dB  |  Bien do Vpp: "));
-    Serial.print(volts, 2);
+    Serial.print(netVolts, 2);
     Serial.println(F(" V"));
   }
 
@@ -429,19 +518,31 @@ void loopSoundExperiment() {
     display.setCursor(85, 0);
     display.print(F("[N2:Menu]"));
 
-    display.setCursor(0, 16);
+    display.setCursor(0, 15);
     display.setTextSize(2);
-    display.printf("%.1f dB", soundDb);
+    display.print(smoothSoundDb, 1);
+    display.print(F(" dB"));
 
     display.setTextSize(1);
     display.setCursor(0, 38);
-    display.printf("Vpp: %.2fV", volts);
+    display.print(F("Max:"));
+    display.print(peakSoundDb, 1);
+    display.print(F("dB | Vpp:"));
+    display.print(netVolts, 2);
+    display.print(F("V"));
 
     display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
-    int barW = map((int)soundDb, 45, 95, 0, 124);
+    int barW = map((int)smoothSoundDb, 43, 96, 0, 124);
     if (barW > 124) barW = 124;
     if (barW < 0) barW = 0;
     display.fillRect(2, 54, barW, 7, SSD1306_WHITE);
+
+    // Vạch đánh dấu Đỉnh âm cực đại (Peak Hold Marker) trên thanh VU
+    int peakX = map((int)peakSoundDb, 43, 96, 2, 125);
+    if (peakX > 125) peakX = 125;
+    if (peakX > 4) {
+      display.drawFastVLine(peakX, 53, 9, SSD1306_WHITE);
+    }
     display.display();
   }
 }
@@ -453,7 +554,6 @@ void loopPhotogateExperiment() {
     delay(40);
     if (digitalRead(BTN_OK) == LOW) {
       if (passA || passB || photogateReported) {
-        // Đã chạy xong lượt: Bấm Nút 1 để sẵn sàng cho lượt mới
         passA = false;
         passB = false;
         timeA_us = 0;
@@ -470,7 +570,6 @@ void loopPhotogateExperiment() {
           display.display();
         }
       } else {
-        // Đang chờ thả xe: Bấm Nút 1 để THAY ĐỔI KHOẢNG CÁCH s (20 -> 30 -> 40 -> 50 -> 60 -> 80 -> 20cm)!
         if (distance_s_cm < 29.0) distance_s_cm = 30.0;
         else if (distance_s_cm < 39.0) distance_s_cm = 40.0;
         else if (distance_s_cm < 49.0) distance_s_cm = 50.0;
@@ -494,8 +593,18 @@ void loopPhotogateExperiment() {
       lastRecordedTime = delta_us / 1000000.0;
       lastRecordedVel = (lastRecordedTime > 0.0001) ? (distance_s_cm / lastRecordedTime) : 0;
       photogateReported = true;
+      lastPhotogateBroadcastMs = millis();
 
-      // In kết quả rõ ràng chốt 1 lần để Web Serial bắt trọn vẹn
+      Serial.print(F("Van toc: "));
+      Serial.print(lastRecordedVel, 2);
+      Serial.print(F(" cm/s  |  Thoi gian t: "));
+      Serial.print(lastRecordedTime, 4);
+      Serial.print(F(" s  |  s = "));
+      Serial.print(distance_s_cm, 1);
+      Serial.println(F(" cm"));
+    } else if (millis() - lastPhotogateBroadcastMs >= 1200) {
+      // Định kỳ phát lại kết quả đang giữ trên màn hình để Web luôn bắt được kể cả khi cắm cáp sau
+      lastPhotogateBroadcastMs = millis();
       Serial.print(F("Van toc: "));
       Serial.print(lastRecordedVel, 2);
       Serial.print(F(" cm/s  |  Thoi gian t: "));
@@ -513,13 +622,19 @@ void loopPhotogateExperiment() {
 
       display.setCursor(0, 16);
       display.setTextSize(2);
-      display.printf("%.1f cm/s", lastRecordedVel);
+      display.print(lastRecordedVel, 1);
+      display.print(F(" cm/s"));
 
       display.setTextSize(1);
       display.setCursor(0, 38);
-      display.printf("t=%.3fs | s=%.0fcm", lastRecordedTime, distance_s_cm);
+      display.print(F("t="));
+      display.print(lastRecordedTime, 3);
+      display.print(F("s | s="));
+      display.print(distance_s_cm, 0);
+      display.print(F("cm"));
+
       display.setCursor(0, 52);
-      display.printf("N1:Luot moi | N2:Menu");
+      display.print(F("N1:Luot moi | N2:Menu"));
       display.display();
     }
     delay(100);
@@ -536,7 +651,6 @@ void loopPhotogateExperiment() {
       display.display();
     }
   } else {
-    // Chờ xuất phát
     if (oledOK) {
       display.clearDisplay();
       display.setTextSize(1);
@@ -546,7 +660,9 @@ void loopPhotogateExperiment() {
       display.println(F("SAN SANG: THA XE"));
       display.setTextSize(2);
       display.setCursor(0, 32);
-      display.printf("s = %.0f cm", distance_s_cm);
+      display.print(F("s = "));
+      display.print(distance_s_cm, 0);
+      display.print(F(" cm"));
       display.setTextSize(1);
       display.setCursor(0, 52);
       display.println(F("N1:Doi s   N2:Ve Menu"));
@@ -556,11 +672,10 @@ void loopPhotogateExperiment() {
   delay(40);
 }
 
-// ================= [BÀI 3]: LỰC KẾ LOADCELL 5KG (BẮT ĐỈNH & KHÓA SỐ ĐO) =================
+// ================= [BÀI 3]: LỰC KẾ LOADCELL 5KG (KHỞI ĐỘNG TỨC THÌ & BẮT ĐỈNH) =================
 void loopLoadcellExperiment() {
-  // Nút 1: Khóa giá trị (HOLD) khi có lực, hoặc TARE về 0 khi không có lực
   if (digitalRead(BTN_OK) == LOW) {
-    delay(40);
+    delay(30);
     if (digitalRead(BTN_OK) == LOW) {
       if (forceHold) {
         forceHold = false;
@@ -573,7 +688,11 @@ void loopLoadcellExperiment() {
           Serial.print(holdForceVal, 2);
           Serial.println(F(" N"));
         } else {
-          scale.tare();
+          if (scale.wait_ready_timeout(120)) {
+            scale.tare(2); // Tare cực nhanh 2 mẫu (~100ms)
+          }
+          liveForce_N = 0.0;
+          liveGrams = 0.0;
           peakForce = 0.0;
           Serial.println(F(">> [TARE]: Da dua luc ke ve 0.00 N!"));
         }
@@ -583,22 +702,29 @@ void loopLoadcellExperiment() {
         display.clearDisplay();
         display.setTextSize(1);
         display.setCursor(15, 26);
-        if (forceHold) display.printf("KHOA: %.2f N", holdForceVal);
-        else display.println(F(">> DA TARE VE 0 <<"));
+        if (forceHold) {
+          display.print(F("KHOA: "));
+          display.print(holdForceVal, 2);
+          display.print(F(" N"));
+        } else {
+          display.println(F(">> DA TARE VE 0 <<"));
+        }
         display.display();
       }
-      delay(250);
+      delay(150);
       while (digitalRead(BTN_OK) == LOW) delay(10);
     }
   }
 
+  // Đọc không chặn (non-blocking): chỉ lấy 1 mẫu mỗi khi chip HX711 báo sẵn sàng
   if (scale.is_ready()) {
-    float grams = scale.get_units(2);
-    if (grams < 0 && grams > -1.5) grams = 0;
-    float liveForce_N = (grams / 1000.0) * 9.80665;
+    hx711OK = true;
+    float rawGrams = scale.get_units(1);
+    if (rawGrams < 0 && rawGrams > -1.5) rawGrams = 0;
+    liveGrams = rawGrams;
+    liveForce_N = (liveGrams / 1000.0) * 9.80665;
     if (liveForce_N < 0) liveForce_N = 0;
 
-    // Tự động ghi nhận đỉnh lực cực đại (Peak Force) khi kéo lò xo
     if (liveForce_N > peakForce) {
       peakForce = liveForce_N;
     }
@@ -611,40 +737,45 @@ void loopLoadcellExperiment() {
       Serial.print(F(" N  |  Dinh: "));
       Serial.print(peakForce, 2);
       Serial.print(F(" N  |  m = "));
-      Serial.print(grams, 1);
+      Serial.print(liveGrams, 1);
       Serial.println(F(" g"));
     }
-
-    if (oledOK) {
-      display.clearDisplay();
-      display.setTextSize(1);
-      display.setCursor(0, 0);
-      display.print(forceHold ? F("LUC [DA KHOA] | [N2]") : F("LUC KE | [N2:Menu]"));
-
-      display.setCursor(0, 16);
-      display.setTextSize(2);
-      display.printf("%.2f N", displayForce);
-
-      display.setTextSize(1);
-      display.setCursor(0, 38);
-      display.printf("Dinh(Max): %.2f N", peakForce);
-
-      display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
-      int barW = map((int)(displayForce * 10), 0, 100, 0, 124);
-      if (barW > 124) barW = 124;
-      if (barW < 0) barW = 0;
-      display.fillRect(2, 54, barW, 7, SSD1306_WHITE);
-      display.display();
-    }
   }
-  delay(60);
+
+  // Luôn vẽ giao diện OLED ngay lập tức (không chờ HX711 để tránh treo ở "DANG KHOI DONG...")
+  if (oledOK) {
+    float displayForce = forceHold ? holdForceVal : liveForce_N;
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.print(forceHold ? F("LUC [DA KHOA] | [N2]") : F("LUC KE | [N2:Menu]"));
+
+    display.setCursor(0, 16);
+    display.setTextSize(2);
+    display.print(displayForce, 2);
+    display.print(F(" N"));
+
+    display.setTextSize(1);
+    display.setCursor(0, 38);
+    display.print(F("Dinh(Max): "));
+    display.print(peakForce, 2);
+    display.print(F(" N"));
+
+    display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
+    int barW = map((int)(displayForce * 10), 0, 100, 0, 124);
+    if (barW > 124) barW = 124;
+    if (barW < 0) barW = 0;
+    display.fillRect(2, 54, barW, 7, SSD1306_WHITE);
+    display.display();
+  }
+  delay(35);
 }
 
-// ================= [BÀI 4]: ĐỊNH LUẬT ÔM INA219 =================
+// ================= [BÀI 4]: ĐỊNH LUẬT ÔM INA219 (LỌC TRUNG BÌNH EMA & TÍNH R = U/I THỰC TẾ) =================
 void loopOhmExperiment() {
-  // Nút 1: Tạm dừng / Tiếp tục
+  // Nút 1: Bấm để Chốt điểm đo (PAUSE) gửi lưu vào bảng trên Web, bấm lần nữa để đo tiếp (RUN)
   if (digitalRead(BTN_OK) == LOW) {
-    delay(40);
+    delay(35);
     if (digitalRead(BTN_OK) == LOW) {
       isRunning = !isRunning;
       Serial.println(isRunning ? F(">> RUN") : F(">> PAUSE"));
@@ -652,12 +783,35 @@ void loopOhmExperiment() {
     }
   }
 
-  float busVoltage_V = ina219.getBusVoltage_V();
-  float current_mA   = ina219.getCurrent_mA();
-  if (current_mA < 0.2) current_mA = 0;
+  // Lấy trung bình 4 lần đọc liên tiếp từ INA219 để khử nhiễu dao động nguồn
+  float sumU = 0.0;
+  float sumI = 0.0;
+  if (inaOK) {
+    for (int i = 0; i < 4; i++) {
+      sumU += ina219.getBusVoltage_V() + (ina219.getShuntVoltage_mV() / 1000.0);
+      sumI += ina219.getCurrent_mA();
+    }
+  }
+  float rawU = sumU * 0.25;
+  float rawI = sumI * 0.25;
 
-  float current_A      = current_mA / 1000.0;
-  float resistance_Ohm = (current_mA > 1.0) ? (busVoltage_V / current_A) : 0.0;
+  if (rawU < 0.05) rawU = 0.0;
+  if (rawI < 0.15) rawI = 0.0;
+
+  if (!ohmFilterInit) {
+    smoothOhmU = rawU;
+    smoothOhmI = rawI;
+    ohmFilterInit = true;
+  } else {
+    smoothOhmU = 0.55 * rawU + 0.45 * smoothOhmU;
+    smoothOhmI = 0.55 * rawI + 0.45 * smoothOhmI;
+  }
+
+  float busVoltage_V = (smoothOhmU < 0.05) ? 0.0 : smoothOhmU;
+  float current_mA   = (smoothOhmI < 0.15) ? 0.0 : smoothOhmI;
+  float current_A    = current_mA / 1000.0;
+  float resistance_Ohm = (current_mA > 0.5) ? (busVoltage_V / current_A) : 0.0;
+  if (resistance_Ohm > 9999.0) resistance_Ohm = 9999.0;
 
   if (isRunning) {
     Serial.print(F("Dong dien I: "));
@@ -673,22 +827,31 @@ void loopOhmExperiment() {
     display.clearDisplay();
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.print(F("DINH LUAT OHM | [N2]"));
+    display.print(isRunning ? F("DINH LUAT OHM | [N2]") : F("OHM [DA CHOT] | [N2]"));
 
-    display.setCursor(0, 16);
+    display.setCursor(0, 15);
     display.setTextSize(2);
-    display.printf("%.1f mA", current_mA);
+    display.print(current_mA, 1);
+    display.print(F(" mA"));
 
     display.setTextSize(1);
     display.setCursor(0, 38);
-    display.printf("U = %.2f V | R = 120R", busVoltage_V);
+    display.print(F("U="));
+    display.print(busVoltage_V, 2);
+    display.print(F("V | R="));
+    if (current_mA > 0.5) {
+      display.print(resistance_Ohm, 0);
+      display.print(F(" Ohm"));
+    } else {
+      display.print(F("--- Ohm"));
+    }
 
     display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
-    int barW = map((int)current_mA, 0, 50, 0, 124);
+    int barW = map((int)current_mA, 0, 60, 0, 124);
     if (barW > 124) barW = 124;
     if (barW < 0) barW = 0;
     display.fillRect(2, 54, barW, 7, SSD1306_WHITE);
     display.display();
   }
-  delay(80);
+  delay(50);
 }

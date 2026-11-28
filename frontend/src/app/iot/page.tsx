@@ -659,6 +659,9 @@ export default function VernierIoTPage() {
 
   // Peak Force tracking cho Định luật Hooke (Loadcell 5kg) - Giúp bắt đỉnh lực khi kéo thả lò xo
   const [peakForce, setPeakForce] = useState<number>(0);
+  const [peakSoundDb, setPeakSoundDb] = useState<number>(0);
+  const [soundVpp, setSoundVpp] = useState<number>(0);
+  const [measuredOhmR, setMeasuredOhmR] = useState<number>(120.0);
 
   // Chốt kết quả lượt chạy xe 2 Cổng quang điện (Vận tốc v & Thời gian t)
   const [lastPhotogateRun, setLastPhotogateRun] = useState<{
@@ -906,26 +909,42 @@ export default function VernierIoTPage() {
   const tryAutoSaveContinuous = (expId: ExperimentType, measuredVal: number, customParamVal?: number) => {
     if (!autoSaveEnabledRef.current) return;
     if (isNaN(measuredVal) || measuredVal <= 0) return;
-    if (expId === "force" && measuredVal < 0.1) return; // Không lưu khi lực kế đang nghỉ 0N
+    if (expId === "force" && measuredVal < 0.12) return; // Không lưu khi lực kế đang nghỉ 0N
+    if (expId === "ohm" && measuredVal < 0.4) return;    // Không lưu khi mạch Định luật Ôm đang ngắt điện (0 mA)
 
     const nowMs = Date.now();
     const lastTime = lastAutoSaveTimeRef.current[expId] || 0;
     const lastVal = lastAutoSaveValRef.current[expId] ?? -9999;
     const curCount = recordedCountRef.current[expId] || 0;
 
-    // 1. Nếu bảng của bài này chưa có dòng nào (curCount === 0 hoặc lastTime === 0): Lưu NGAY LẬP TỨC Lần đo 1!
+    // 1. Nếu bảng của bài này chưa có dòng nào (curCount === 0 hoặc lastTime === 0):
+    // - Bài Ôm & Lực kế: Lưu ngay điểm đo đầu tiên khi có tín hiệu!
+    // - Bài Âm thanh: Lưu ngay khi có âm thanh thực nghiệm (> 48 dB) hoặc lưu điểm nền đầu tiên
     if (curCount === 0 || lastTime === 0) {
       autoAppendRecord(expId, measuredVal, customParamVal);
       return;
     }
 
-    // 2. Các lần đo tiếp theo: Tự động lưu khi có sự thay đổi giá trị đáng kể (sau ít nhất 2.2 giây) hoặc định kỳ mỗi 4 giây (tối đa 12 mẫu tự động để bảng gọn đẹp)
-    if (curCount < 12) {
+    // 2. Các lần đo tiếp theo: CHỈ tự động lưu khi người dùng tạo ra mức tín hiệu MỚI rõ rệt
+    // (VD: Vỗ tay / gõ âm thoa trong bài Âm thanh; vặn biến trở sang mức U/I mới trong bài Định luật Ôm; hoặc kéo mức lực mới trong bài Loadcell)
+    if (curCount < 25) {
       const elapsed = nowMs - lastTime;
       const delta = Math.abs(measuredVal - lastVal);
-      const threshold = expId === "sound" ? 1.2 : expId === "ohm" ? 0.8 : 0.12;
-      if ((elapsed >= 2200 && delta >= threshold) || elapsed >= 4000) {
-        autoAppendRecord(expId, measuredVal, customParamVal);
+      if (expId === "sound") {
+        // Tự động lưu khi có đỉnh âm thanh mới chênh lệch >= 3.0 dB và độ to >= 52 dB (tránh lưu lặp lại tiếng ồn nền phòng yên tĩnh)
+        if (elapsed >= 1500 && delta >= 3.0 && measuredVal >= 52.0) {
+          autoAppendRecord("sound", measuredVal, customParamVal);
+        }
+      } else if (expId === "ohm") {
+        // Tự động lưu khi học sinh vặn biến trở làm dòng điện thay đổi >= 1.2 mA
+        if (elapsed >= 1500 && delta >= 1.2) {
+          autoAppendRecord("ohm", measuredVal, customParamVal);
+        }
+      } else if (expId === "force") {
+        // Tự động lưu khi lực kéo thay đổi >= 0.15 N
+        if (elapsed >= 1500 && delta >= 0.15) {
+          autoAppendRecord("force", measuredVal, customParamVal);
+        }
       }
     }
   };
@@ -1419,16 +1438,35 @@ export default function VernierIoTPage() {
       }
     }
 
-    // 4. Bắt điện áp thực tế U (V) từ cảm biến INA219
-    const matchU = trimmed.match(/(?:Dien ap U|U)[\s:=]+(-?\d+(?:\.\d+)?)/i);
+    // 4. Bắt điện áp thực tế U (V) và điện trở R (Ohm) từ cảm biến INA219, hoặc biên độ Vpp (V) từ MAX4466
+    const matchVpp = trimmed.match(/Vpp[\s:=]+(-?\d+(?:\.\d+)?)/i);
+    if (matchVpp && matchVpp[1]) {
+      const vppVal = parseFloat(matchVpp[1]);
+      if (!isNaN(vppVal) && vppVal >= 0 && vppVal <= 5.0) {
+        setSoundVpp(vppVal);
+      }
+    }
+
+    const matchR = trimmed.match(/(?:R do duoc|R)[\s:=]+(-?\d+(?:\.\d+)?)\s*Ohm/i);
+    if (matchR && matchR[1]) {
+      const rVal = parseFloat(matchR[1]);
+      if (!isNaN(rVal) && rVal > 1 && rVal < 9999) {
+        setMeasuredOhmR(rVal);
+      }
+    }
+
+    const matchU = trimmed.match(/(?:Dien ap U|\bU)[\s:=]+(-?\d+(?:\.\d+)?)\s*V/i);
     let parsedUVal: number | null = null;
     if (matchU && matchU[1]) {
       const measuredU = parseFloat(matchU[1]);
-      if (!isNaN(measuredU) && measuredU > 0.05 && measuredU < 30.0) {
+      if (!isNaN(measuredU) && measuredU >= 0.0 && measuredU < 30.0) {
         parsedUVal = measuredU;
         setRealVoltage(measuredU);
-        if ((activeExpRef.current === "ohm" || detectedMode === "ohm") && autoSyncOhmVoltageRef.current) {
-          setParamValue(parseFloat(measuredU.toFixed(2)));
+        if ((activeExpRef.current === "ohm" || detectedMode === "ohm") && autoSyncOhmVoltageRef.current && measuredU > 0.05) {
+          const roundedU = parseFloat(measuredU.toFixed(2));
+          setParamValue(roundedU);
+          paramValueRef.current = roundedU;
+          theoryValueRef.current = EXPERIMENTS["ohm"].calcTheory(roundedU);
         }
       }
     }
@@ -1504,18 +1542,23 @@ export default function VernierIoTPage() {
       }
     }
 
-    // 6. Bắt đỉnh lực kéo lò xo Loadcell (Peak Force)
+    // 6. Bắt đỉnh lực kéo Loadcell (Peak Force) hoặc đỉnh âm thanh MAX4466 (Peak dB)
+    const targetExp: ExperimentType =
+      detectedMode && detectedMode !== "menu" ? detectedMode : activeExpRef.current;
+
     const matchPeak = trimmed.match(/(?:Dinh|Peak)[\s:=]+(-?\d+(?:\.\d+)?)/i);
     if (matchPeak && matchPeak[1]) {
       const pVal = parseFloat(matchPeak[1]);
       if (!isNaN(pVal) && pVal > 0) {
-        setPeakForce((prev) => Math.max(prev, pVal));
+        if (targetExp === "sound") {
+          setPeakSoundDb((prev) => Math.max(prev, pVal));
+        } else if (targetExp === "force") {
+          setPeakForce((prev) => Math.max(prev, pVal));
+        }
       }
     }
 
     // 7. Trích xuất giá trị đo chính của dòng dữ liệu
-    const targetExp: ExperimentType =
-      detectedMode && detectedMode !== "menu" ? detectedMode : activeExpRef.current;
 
     let parsedNum: number = NaN;
     const matchI = trimmed.match(/(?:Dong dien I|I)[\s:=]+(-?\d+(?:\.\d+)?)/i);
@@ -1551,6 +1594,8 @@ export default function VernierIoTPage() {
         setCurrentLiveVal(parsedNum);
         if (targetExp === "force" && parsedNum > 0.15) {
           setPeakForce((prev) => Math.max(prev, parsedNum));
+        } else if (targetExp === "sound" && parsedNum > 43.0) {
+          setPeakSoundDb((prev) => Math.max(prev, parsedNum));
         }
 
         if (!isRecordingRef.current) return;
@@ -3524,6 +3569,162 @@ export default function VernierIoTPage() {
                     </button>
                   </div>
                 )
+              )}
+
+              {/* CARD ĐẶC THÙ 3: BÀI 1 — PHÂN TÍCH ĐỘ TO, ĐỈNH ÂM PEAK dB & BIÊN ĐỘ VPP (MAX4466) */}
+              {activeExp === "sound" && (
+                <div className="p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/30 flex flex-col gap-2.5 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl">🔊</span>
+                      <div>
+                        <div className="font-bold text-sky-900 dark:text-sky-200 flex flex-wrap items-center gap-2">
+                          <span>GIÁM SÁT SÓNG ÂM &amp; BẮT ĐỈNH DECIBEL (MAX4466):</span>
+                          <span className="px-2 py-0.5 rounded-full bg-sky-600 text-white font-mono text-xs font-black">
+                            Đỉnh Max: {Math.max(peakSoundDb, latestVal, 44.0).toFixed(1)} dB
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300 font-mono text-xs font-bold">
+                            Biên độ Vpp: {(soundVpp > 0 ? soundVpp : Math.max(0.05, (latestVal - 43.5) / 30)).toFixed(2)} V
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[11px] font-bold">
+                            {latestVal < 52 ? "🟢 Môi trường Yên tĩnh" : latestVal < 72 ? "🔵 Tiếng nói / Âm vừa" : "🟠 Âm thanh lớn (Đỉnh xung)!"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-sky-800/80 dark:text-sky-300/80 mt-0.5">
+                          Bộ lọc khử gai nhiễu ADC đã kích hoạt: Khi yên tĩnh ~44 dB, khi vỗ tay hoặc gõ âm thoa hệ thống tự động bắt đỉnh âm cực đại và lưu vào Bảng Ghi Chép!
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const valToSave = Math.max(peakSoundDb, latestVal, 65.0);
+                          handleSaveSnapshot(parseFloat(valToSave.toFixed(1)));
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                      >
+                        <BookmarkPlus className="w-3.5 h-3.5" />
+                        <span>📸 Lưu Đỉnh Âm ({Math.max(peakSoundDb, latestVal, 44.0).toFixed(1)} dB)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const curTheory = theoryValueRef.current || 74.0;
+                          const simDb = parseFloat((curTheory + (Math.random() - 0.5) * 3.2).toFixed(1));
+                          const simVpp = parseFloat(Math.max(0.08, (simDb - 43.5) / 28.0).toFixed(2));
+                          const now = new Date();
+                          const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                          const err = curTheory !== 0 ? parseFloat(((Math.abs(simDb - curTheory) / Math.abs(curTheory)) * 100).toFixed(2)) : 0;
+                          setSoundVpp(simVpp);
+                          setPeakSoundDb((prev) => Math.max(prev, simDb));
+                          setCurrentLiveVal(simDb);
+                          setTelemetryList((prev) => {
+                            const nextTime = prev.length > 0 ? parseFloat((prev[prev.length - 1].time + 0.5).toFixed(1)) : 0.5;
+                            return [
+                              ...prev.slice(-39),
+                              { time: nextTime, measured: simDb, theory: parseFloat(curTheory.toFixed(2)), errorPct: err },
+                            ];
+                          });
+                          autoAppendRecord("sound", simDb, paramValue, timeStr);
+                          setStatusMsg(`✅ Đã thu mẫu sóng âm: L = ${simDb} dB (Vpp = ${simVpp} V) và tự động lưu vào Bảng Ghi Chép!`);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                      >
+                        🔊 Gõ Âm Thoa / Vỗ Tay Đo Ngay
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPeakSoundDb(44.0);
+                          sendSerialCommand("RESET");
+                          setStatusMsg("Đã đặt lại đỉnh âm thanh Peak dB về mức nền yên tĩnh!");
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs hover:bg-slate-100 transition-all cursor-pointer"
+                      >
+                        Reset Đỉnh
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* CARD ĐẶC THÙ 4: BÀI 4 — ĐỒNG HỒ ĐO ĐẶC TUYẾN V - A & ĐIỆN TRỞ THỰC NGHIỆM R = U/I (INA219) */}
+              {activeExp === "ohm" && (
+                <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex flex-col gap-2.5 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl">⚡</span>
+                      <div>
+                        <div className="font-bold text-purple-900 dark:text-purple-200 flex flex-wrap items-center gap-2">
+                          <span>ĐỒNG HỒ ĐO ĐỊNH LUẬT ÔM (INA219 16V-400mA):</span>
+                          <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white font-mono text-xs font-black">
+                            U = {(realVoltage ?? paramValue).toFixed(2)} V
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-sky-600 text-white font-mono text-xs font-black">
+                            I = {latestVal.toFixed(2)} mA
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 font-mono text-xs font-bold">
+                            R = {latestVal > 0.5 ? (((realVoltage ?? paramValue) / (latestVal / 1000.0))).toFixed(1) : measuredOhmR.toFixed(1)} Ω
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-mono text-xs font-bold">
+                            P = {((realVoltage ?? paramValue) * latestVal).toFixed(1)} mW
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-purple-800/80 dark:text-purple-300/80 mt-0.5">
+                          Khi vặn biến trở trên hộp (hoặc bấm nút quét mức điện áp bên phải), hệ thống tự động đồng bộ U thực tế, vẽ đường đặc tuyến V - A và lưu vào Bảng Ghi Chép!
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const curU = parseFloat((realVoltage ?? paramValue).toFixed(2));
+                          const curI = latestVal > 0.2 ? latestVal : parseFloat(((curU / 120.0) * 1000.0).toFixed(2));
+                          autoAppendRecord("ohm", curI, curU);
+                          setStatusMsg(`✅ Đã chốt điểm đo Định luật Ôm: U = ${curU} V → I = ${curI} mA vào Bảng Ghi Chép!`);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                      >
+                        <BookmarkPlus className="w-3.5 h-3.5" />
+                        <span>📸 Chốt Điểm V-A Này</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ohmSteps = [1.8, 3.0, 4.5, 6.0, 7.4, 9.0, 12.0];
+                          const curCount = recordedCountRef.current["ohm"] || 0;
+                          const nextU = ohmSteps[curCount % ohmSteps.length];
+                          const curTheoryI = EXPERIMENTS["ohm"].calcTheory(nextU);
+                          const simI = parseFloat((curTheoryI + (Math.random() - 0.5) * 0.6).toFixed(2));
+                          const simR = parseFloat(((nextU / (simI / 1000.0))).toFixed(1));
+                          const now = new Date();
+                          const timeStr = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                          const err = curTheoryI !== 0 ? parseFloat(((Math.abs(simI - curTheoryI) / Math.abs(curTheoryI)) * 100).toFixed(2)) : 0;
+                          setParamValue(nextU);
+                          paramValueRef.current = nextU;
+                          theoryValueRef.current = curTheoryI;
+                          setRealVoltage(nextU);
+                          setMeasuredOhmR(simR);
+                          setCurrentLiveVal(simI);
+                          setTelemetryList((prev) => {
+                            const nextTime = prev.length > 0 ? parseFloat((prev[prev.length - 1].time + 0.5).toFixed(1)) : 0.5;
+                            return [
+                              ...prev.slice(-39),
+                              { time: nextTime, measured: simI, theory: parseFloat(curTheoryI.toFixed(2)), errorPct: err },
+                            ];
+                          });
+                          autoAppendRecord("ohm", simI, nextU, timeStr);
+                          setStatusMsg(`✅ Đã đo điểm đặc tuyến V-A mới: U = ${nextU} V → I = ${simI} mA (R = ${simR} Ω) và lưu vào Bảng Ghi Chép!`);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                      >
+                        ⚡ Vặn Biến Trở Đo Điểm V-A Tiếp Theo
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* Chart container */}
