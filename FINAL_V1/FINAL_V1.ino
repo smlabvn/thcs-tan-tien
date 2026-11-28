@@ -1,5 +1,5 @@
 // ==============================================================================
-//           HỘP THÍ NGHIỆM SMLAB PHYSIX IOT & KHTN ALL-IN-ONE MASTER
+//             HỘP THÍ NGHIỆM PHYSIX IOT & KHTN ALL-IN-ONE MASTER
 //             TRƯỜNG THCS TÂY TIẾN - ĐỀ TÀI KHOA HỌC KỸ THUẬT (KHKT)
 //
 // TÍCH HỢP 4 BÀI THÍ NGHIỆM TRÊN 1 BO MẠCH DUY NHẤT (ESP32 Type-C WROOM-32)
@@ -136,7 +136,7 @@ void setup() {
   delay(300);
 
   Serial.println(F("\n========================================================"));
-  Serial.println(F(">> HOP THI NGHIEM SMLAB PHYSIX ALL-IN-ONE KHOI DONG! <<"));
+  Serial.println(F(">> HOP THI NGHIEM PHYSIX THCS TAY TIEN ALL-IN-ONE KHOI DONG! <<"));
   Serial.println(F("THCS TAY TIEN - 4 CHE DO - QUAY LAI MENU BANG NUT 2"));
   Serial.println(F("========================================================"));
 

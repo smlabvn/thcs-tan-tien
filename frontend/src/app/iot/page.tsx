@@ -2048,7 +2048,7 @@ export default function VernierIoTPage() {
       csvContent += `Khối lớp,"${exp.grade}"\n`;
       csvContent += `Cảm biến sử dụng,"${exp.sensorName}"\n`;
       csvContent += `Thời gian xuất báo cáo,"${new Date().toLocaleString("vi-VN")}"\n`;
-      csvContent += `Hệ thống thực hành,"Hộp Thí Nghiệm SMLab PhysiX IoT (ESP32 Web Serial)"\n\n`;
+      csvContent += `Hệ thống thực hành,"Hộp Thí Nghiệm PhysiX IoT - Trường THCS Tây Tiến (ESP32 Web Serial)"\n\n`;
 
       csvContent += `Lần đo,Thời gian ghi nhận,Thông số cài đặt (${exp.paramName}),Đơn vị thông số,Giá trị thực nghiệm đo được,Đơn vị đo,Giá trị lý thuyết chuẩn,Sai số tuyệt đối Δ,Sai số tương đối (%),Đánh giá chất lượng phép đo\n`;
 
