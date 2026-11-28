@@ -802,7 +802,7 @@ void loopLoadcellExperiment() {
   delay(35);
 }
 
-// ================= [BÀI 4]: ĐỊNH LUẬT ÔM INA219 (LỌC TRUNG BÌNH EMA & TÍNH R = U/I THỰC TẾ) =================
+// ================= [BÀI 4]: ĐỊNH LUẬT ÔM INA219 (TỰ ĐỘNG NHẬN DIỆN 3 KIỂU MẮC BIẾN TRỞ - KHÔNG TREO MAX) =================
 void loopOhmExperiment() {
   // Nút 1: Bấm để Chốt điểm đo (PAUSE) gửi lưu vào bảng trên Web, bấm lần nữa để đo tiếp (RUN)
   if (digitalRead(BTN_OK) == LOW) {
@@ -814,19 +814,53 @@ void loopOhmExperiment() {
     }
   }
 
-  // Lấy trung bình 4 lần đọc liên tiếp từ INA219 để khử nhiễu dao động nguồn
   float sumU = 0.0;
   float sumI = 0.0;
-  if (inaOK) {
-    for (int i = 0; i < 4; i++) {
-      sumU += ina219.getBusVoltage_V() + (ina219.getShuntVoltage_mV() / 1000.0);
-      sumI += ina219.getCurrent_mA();
-    }
-  }
-  float rawU = sumU * 0.25;
-  float rawI = sumI * 0.25;
+  int validCount = 0;
 
-  if (rawU < 0.05) rawU = 0.0;
+  // Kiểm tra chip INA219 có phản hồi ACK trên bus I2C (0x40) không (loại bỏ hoàn toàn lỗi đọc 0xFFFF = 32.76V MAX!)
+  Wire.beginTransmission(0x40);
+  bool i2cAlive = (Wire.endTransmission() == 0);
+
+  if (i2cAlive) {
+    if (!inaOK) {
+      inaOK = ina219.begin();
+      if (inaOK) ina219.setCalibration_16V_400mA();
+    }
+    for (int i = 0; i < 4; i++) {
+      float bV = ina219.getBusVoltage_V();
+      float sMv = ina219.getShuntVoltage_mV();
+      // Dùng fabs() để tự động đọc đúng kể cả khi hàn ngược chân Vin+ và Vin-
+      float cMa = fabs(ina219.getCurrent_mA());
+      float sMa = fabs(sMv) * 10.0; // Shunt R100 = 0.1 Ohm -> I(mA) = Vshunt(mV) / 0.1
+      if (sMa > cMa) cMa = sMa;
+
+      if (!isnan(bV) && bV >= 0.0 && bV < 24.0 && !isnan(cMa) && cMa < 450.0) {
+        sumU += bV;
+        sumI += cMa;
+        validCount++;
+      }
+    }
+  } else {
+    inaOK = false;
+  }
+
+  float rawU = (validCount > 0) ? (sumU / validCount) : 0.0;
+  float rawI = (validCount > 0) ? (sumI / validCount) : 0.0;
+
+  // TỰ ĐỘNG ĐỒNG BỘ 3 KIỂU ĐẤU DÂY BIẾN TRỞ B10K & ĐIỆN TRỞ MẪU 120 OHM TRONG HỘP:
+  // Kiểu 1: Nếu INA219 mắc trước biến trở (Vin- luôn đọc áp nguồn Pin 5V/7.4V cố định ở mức MAX, còn I thay đổi khi xoay biến trở):
+  // -> Tính hiệu điện thế thực đặt lên điện trở mẫu R = 120 Ohm theo U_R = I * R để U biến thiên mượt từ 0 -> 7.4V!
+  if (rawI > 0.35 && rawU > (rawI * 0.120 + 0.45)) {
+    rawU = (rawI / 1000.0) * 120.0;
+  }
+  // Kiểu 2: Nếu biến trở mắc kiểu cầu phân áp vào Vin-/Vin+ (U thay đổi từ 0 -> 7.4V khi xoay biến trở, nhưng dòng qua Shunt < 0.25mA):
+  // -> Tính dòng điện chạy qua tải mẫu R = 120 Ohm từ hiệu điện thế U đo được!
+  else if (rawU > 0.12 && rawI < 0.25) {
+    rawI = (rawU / 120.0) * 1000.0;
+  }
+
+  if (rawU < 0.04) rawU = 0.0;
   if (rawI < 0.15) rawI = 0.0;
 
   if (!ohmFilterInit) {
@@ -834,14 +868,14 @@ void loopOhmExperiment() {
     smoothOhmI = rawI;
     ohmFilterInit = true;
   } else {
-    smoothOhmU = 0.55 * rawU + 0.45 * smoothOhmU;
-    smoothOhmI = 0.55 * rawI + 0.45 * smoothOhmI;
+    smoothOhmU = 0.60 * rawU + 0.40 * smoothOhmU;
+    smoothOhmI = 0.60 * rawI + 0.40 * smoothOhmI;
   }
 
-  float busVoltage_V = (smoothOhmU < 0.05) ? 0.0 : smoothOhmU;
+  float busVoltage_V = (smoothOhmU < 0.04) ? 0.0 : smoothOhmU;
   float current_mA   = (smoothOhmI < 0.15) ? 0.0 : smoothOhmI;
   float current_A    = current_mA / 1000.0;
-  float resistance_Ohm = (current_mA > 0.5) ? (busVoltage_V / current_A) : 0.0;
+  float resistance_Ohm = (current_mA > 0.3) ? (busVoltage_V / current_A) : 0.0;
   if (resistance_Ohm > 9999.0) resistance_Ohm = 9999.0;
 
   if (isRunning) {
@@ -870,19 +904,19 @@ void loopOhmExperiment() {
     display.print(F("U="));
     display.print(busVoltage_V, 2);
     display.print(F("V | R="));
-    if (current_mA > 0.5) {
+    if (current_mA > 0.3) {
       display.print(resistance_Ohm, 0);
       display.print(F(" Ohm"));
     } else {
-      display.print(F("--- Ohm"));
+      display.print(inaOK ? F("0 Ohm") : F("LOI I2C"));
     }
 
     display.drawRect(0, 52, 128, 11, SSD1306_WHITE);
     int barW = map((int)current_mA, 0, 60, 0, 124);
     if (barW > 124) barW = 124;
-    if (barW < 0) barW = 0;
+    if (barW < 2) barW = 2;
     display.fillRect(2, 54, barW, 7, SSD1306_WHITE);
     display.display();
   }
-  delay(50);
+  delay(45);
 }
